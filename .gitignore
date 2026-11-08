@@ -1,0 +1,43 @@
+# ===== 截图与预览图（不入库，体积大且可重新生成）=====
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+!docs/images/*.png
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+
+# ===== 数据抓取中间产物 =====
+scripts/raw-opentargets.json
+scripts/fetch.log
+scripts/*.log
+
+# ===== 编辑器 / IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== 临时文件 =====
+.tmp/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ===== 部署相关（含服务器信息，不入库）=====
+deploy.env
+*.pem
+*.key

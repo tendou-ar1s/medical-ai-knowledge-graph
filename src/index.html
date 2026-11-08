@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05080f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>BiomedKG · 生物医学知识图谱 | 医学人工智能</title>
+<meta name="description" content="基于知识图谱的疾病—基因—药物关联可视化平台，医学人工智能课程作业">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=20261108e">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%233ee8c4' stroke-width='6'/><circle cx='50' cy='50' r='12' fill='%233ee8c4'/></svg>">
+</head>
+<body>
+
+<!-- 背景层 -->
+<div class="bg-layer">
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+  <div class="bg-glow bg-glow--3"></div>
+  <div class="bg-scanline"></div>
+</div>
+
+<!-- 导航 -->
+<nav class="nav" id="nav">
+  <div class="nav__brand">
+    <div class="nav__logo">
+      <svg viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="24" r="19" stroke="#3ee8c4" stroke-width="1.6" opacity="0.35"/>
+        <circle cx="24" cy="24" r="11" stroke="#3ee8c4" stroke-width="1.6" opacity="0.7"/>
+        <circle cx="24" cy="24" r="4" fill="#3ee8c4"/>
+        <circle cx="24" cy="5" r="2.6" fill="#ff5c8a"/>
+        <circle cx="41" cy="31" r="2.6" fill="#4db8ff"/>
+        <circle cx="7" cy="31" r="2.6" fill="#ffc857"/>
+        <line x1="24" y1="5" x2="24" y2="20" stroke="#3ee8c4" stroke-width="1.1" opacity="0.55"/>
+        <line x1="41" y1="31" x2="31" y2="26" stroke="#3ee8c4" stroke-width="1.1" opacity="0.55"/>
+        <line x1="7" y1="31" x2="17" y2="26" stroke="#3ee8c4" stroke-width="1.1" opacity="0.55"/>
+      </svg>
+    </div>
+    <span>BiomedKG</span>
+  </div>
+  <ul class="nav__links">
+    <li><a href="#hero" class="active">概览</a></li>
+    <li><a href="#graph">图谱</a></li>
+    <li><a href="#stats">统计</a></li>
+    <li><a href="#compare">对比</a></li>
+    <li><a href="#insights">洞察</a></li>
+    <li><a href="#ai">AI</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<header class="hero" id="hero">
+  <div class="hero__badge">
+    <span class="hero__badge-dot"></span>
+    医学人工智能 · 课程作业
+  </div>
+
+  <h1 class="hero__title">
+    <span class="hero__title-line">生物医学</span>
+    <span class="hero__title-line hero__title-grad">知识图谱</span>
+  </h1>
+
+  <p class="hero__subtitle">
+    将 <strong>疾病</strong>、<strong>基因</strong>、<strong>药物</strong> 之间的复杂关联，
+    构建成一张可交互的知识网络。力导向布局展示真实生物学通路，
+    点击任意节点即可探索其背后的分子机制、临床证据与靶向治疗。
+  </p>
+
+  <div class="hero__actions">
+    <a href="#graph" class="btn btn--primary">
+      开始探索图谱
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+        <path d="M5 12h14M13 6l6 6-6 6"/>
+      </svg>
+    </a>
+    <a href="#ai" class="btn btn--ghost">了解 AI 应用</a>
+  </div>
+
+  <div class="hero__stats">
+    <div class="hero__stat">
+      <div class="hero__stat-num" data-count="50">0</div>
+      <div class="hero__stat-label">知识节点</div>
+    </div>
+    <div class="hero__stat">
+      <div class="hero__stat-num" data-count="60">0</div>
+      <div class="hero__stat-label">关联关系</div>
+    </div>
+    <div class="hero__stat">
+      <div class="hero__stat-num" data-count="11">0</div>
+      <div class="hero__stat-label">疾病类型</div>
+    </div>
+    <div class="hero__stat">
+      <div class="hero__stat-num" data-count="4">0</div>
+      <div class="hero__stat-label">数据库来源</div>
+    </div>
+  </div>
+
+  <div class="hero__scroll">
+    <span>Scroll</span>
+    <div class="hero__scroll-arrow"></div>
+  </div>
+</header>
+
+<!-- 知识图谱 -->
+<section class="graph-section" id="graph">
+  <div class="section__header reveal" style="margin-bottom:34px">
+    <span class="section__label">Interactive Knowledge Graph</span>
+    <h2 class="section__title">探索关联网络</h2>
+    <p class="section__desc">
+      拖拽移动画布 · 滚轮缩放 · 点击节点查看详情
+    </p>
+  </div>
+
+  <div class="graph-toolbar reveal">
+    <div class="graph-filters">
+      <button class="filter-chip active" data-filter="all">
+        <span class="filter-chip__dot" style="background:linear-gradient(135deg,#ff5c8a,#4db8ff)"></span>
+        全部
+        <span class="filter-chip__count">—</span>
+      </button>
+      <button class="filter-chip" data-filter="disease">
+        <span class="filter-chip__dot" style="background:#ff5c8a"></span>
+        疾病
+        <span class="filter-chip__count">—</span>
+      </button>
+      <button class="filter-chip" data-filter="gene">
+        <span class="filter-chip__dot" style="background:#4db8ff"></span>
+        基因
+        <span class="filter-chip__count">—</span>
+      </button>
+    </div>
+
+    <div class="graph-toolbar__right">
+      <div class="visible-counter" id="visibleCounter" title="当前显示的节点数">
+        <span class="visible-counter__dot"></span>
+        <span id="visibleCount">0</span> / <span id="totalCount">0</span>
+      </div>
+      <select class="degree-select" id="degreeFilter" title="按关联数筛选节点">
+        <option value="0">全部节点</option>
+        <option value="2">关联 ≥ 2</option>
+        <option value="3">关联 ≥ 3</option>
+        <option value="5">关联 ≥ 5</option>
+        <option value="8">关联 ≥ 8</option>
+        <option value="12">关联 ≥ 12</option>
+      </select>
+      <button class="tool-btn" id="btnSearch" title="打开查找面板 (Ctrl+K)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        查找 <kbd>Ctrl K</kbd>
+      </button>
+      <button class="tool-btn" id="btnPath" title="路径探索">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="5" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7 7.5l4 4 3-3 3 3"/>
+        </svg>
+        路径
+      </button>
+      <button class="tool-btn" id="btnFit" title="自适应视图">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+        </svg>
+        自适应
+      </button>
+      <button class="tool-btn" id="btnReset" title="重置视图">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+        </svg>
+        重置
+      </button>
+    </div>
+  </div>
+
+  <div class="graph-stage reveal">
+    <canvas id="graphCanvas"></canvas>
+
+    <!-- 移动端浮动控制 -->
+    <div class="mobile-controls">
+      <button class="mob-btn" id="mobSearch" aria-label="查找">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+      </button>
+      <button class="mob-btn" id="mobZoomOut" aria-label="缩小">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M5 12h14"/>
+        </svg>
+      </button>
+      <button class="mob-btn" id="mobZoomIn" aria-label="放大">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+      <button class="mob-btn" id="mobFit" aria-label="自适应">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="graph-legend">
+      <div class="graph-legend__item">
+        <span class="graph-legend__dot" style="background:#ff5c8a;box-shadow:0 0 10px rgba(255,92,138,0.8)"></span>
+        疾病 Disease
+      </div>
+      <div class="graph-legend__item">
+        <span class="graph-legend__dot" style="background:#4db8ff;box-shadow:0 0 10px rgba(77,184,255,0.8)"></span>
+        基因 Gene
+      </div>
+      <div class="graph-legend__item">
+        <span class="graph-legend__dot" style="background:#ffc857;box-shadow:0 0 10px rgba(255,200,87,0.8)"></span>
+        药物 Drug
+      </div>
+    </div>
+
+    <!-- 详情面板 -->
+    <aside class="detail-panel" id="detailPanel">
+      <div class="detail-panel__head">
+        <span class="detail-panel__type" id="detailType"></span>
+        <h3 class="detail-panel__title" id="detailTitle"></h3>
+        <p class="detail-panel__en" id="detailEn"></p>
+        <button class="detail-panel__close" id="detailClose" aria-label="关闭">✕</button>
+      </div>
+      <div class="detail-panel__body" id="detailBody"></div>
+    </aside>
+
+    <div class="graph-stage__hint">
+      拖拽移动 · 滚轮缩放 · 点击节点查看详情
+    </div>
+  </div>
+</section>
+
+<!-- ============ 全局查找面板 ============ -->
+<div class="command-overlay" id="commandOverlay">
+  <div class="command-panel">
+    <div class="command-panel__input">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input type="text" id="commandInput" placeholder="搜索疾病、基因、药物…（支持中文、英文缩写）" autocomplete="off" spellcheck="false">
+      <kbd class="command-panel__esc">ESC</kbd>
+    </div>
+    <div class="command-panel__body" id="commandResults"></div>
+    <div class="command-panel__footer">
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+      <span><kbd>Enter</kbd> 定位节点</span>
+      <span><kbd>Esc</kbd> 关闭</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 路径探索面板 ============ -->
+<div class="modal-overlay" id="pathModal">
+  <div class="modal">
+    <div class="modal__head">
+      <h3 class="modal__title">路径探索</h3>
+      <p class="modal__desc">选择两个节点，查找它们之间最短的关联路径</p>
+      <button class="modal__close" id="pathClose">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="path-selects">
+        <div class="path-select">
+          <label>起点</label>
+          <select id="pathFrom">
+            <option value="">选择起点…</option>
+          </select>
+        </div>
+        <div class="path-arrow">→</div>
+        <div class="path-select">
+          <label>终点</label>
+          <select id="pathTo">
+            <option value="">选择终点…</option>
+          </select>
+        </div>
+      </div>
+      <div class="path-actions">
+        <button class="btn btn--primary btn--sm" id="pathRun">查找路径</button>
+        <button class="btn btn--ghost btn--sm" id="pathClear">清除高亮</button>
+      </div>
+      <div class="path-result" id="pathResult"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 数据统计 -->
+<section class="section" id="stats">
+  <div class="section__header reveal">
+    <span class="section__label">Graph Statistics</span>
+    <h2 class="section__title">图谱数据统计</h2>
+    <p class="section__desc">
+      从节点构成、关联强度到枢纽基因，用数据量化这张知识网络的形态。
+    </p>
+  </div>
+
+  <div class="stats-layout">
+    <!-- 类型分布环形图 -->
+    <div class="stat-card reveal">
+      <h3 class="stat-card__title">节点类型分布</h3>
+      <div class="donut-wrap">
+        <canvas id="donutChart" width="260" height="260"></canvas>
+        <div class="donut-center">
+          <div class="donut-center__num">50</div>
+          <div class="donut-center__label">总节点</div>
+        </div>
+      </div>
+      <div class="donut-legend">
+        <div class="donut-legend__item" data-type="disease">
+          <span class="donut-legend__dot" style="background:#ff5c8a"></span>
+          <span class="donut-legend__name">疾病</span>
+          <span class="donut-legend__val">11</span>
+        </div>
+        <div class="donut-legend__item" data-type="gene">
+          <span class="donut-legend__dot" style="background:#4db8ff"></span>
+          <span class="donut-legend__name">基因</span>
+          <span class="donut-legend__val">18</span>
+        </div>
+        <div class="donut-legend__item" data-type="drug">
+          <span class="donut-legend__dot" style="background:#ffc857"></span>
+          <span class="donut-legend__name">药物</span>
+          <span class="donut-legend__val">21</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 枢纽节点排行 -->
+    <div class="stat-card reveal">
+      <h3 class="stat-card__title">枢纽节点 Top 8 <span class="stat-card__sub">按关联数排序</span></h3>
+      <div class="rank-list" id="hubRankList"></div>
+    </div>
+
+    <!-- 关系类型 -->
+    <div class="stat-card reveal">
+      <h3 class="stat-card__title">关系类型分布</h3>
+      <div class="bar-list" id="relationBarList"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 疾病对比 -->
+<section class="section" id="compare">
+  <div class="section__header reveal">
+    <span class="section__label">Disease Comparison</span>
+    <h2 class="section__title">疾病关联对比</h2>
+    <p class="section__desc">
+      选择两种疾病，对比它们共享的基因与药物，发现潜在的共同机制与交叉治疗机会。
+    </p>
+  </div>
+
+  <div class="compare-wrap reveal">
+    <div class="compare-pickers">
+      <select id="compareA" class="compare-select">
+        <option value="">选择疾病 A…</option>
+      </select>
+      <span class="compare-vs">VS</span>
+      <select id="compareB" class="compare-select">
+        <option value="">选择疾病 B…</option>
+      </select>
+    </div>
+    <div class="compare-result" id="compareResult">
+      <div class="compare-empty">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.35">
+          <path d="M12 3v18M3 12h18"/>
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+        <p>选择两种疾病开始对比</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 数据洞察 -->
+<section class="section" id="insights">
+  <div class="section__header reveal">
+    <span class="section__label">Data Insights</span>
+    <h2 class="section__title">从图谱中看见医学规律</h2>
+    <p class="section__desc">
+      知识图谱的价值不止于"把数据画出来"——它让隐含的生物学机制、药物重定位机会与疾病共病关系浮出水面。
+    </p>
+  </div>
+
+  <div class="insights">
+    <div class="insight-card reveal">
+      <div class="insight-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20M2 12h20"/>
+          <circle cx="12" cy="12" r="9"/>
+        </svg>
+      </div>
+      <h3 class="insight-card__title">靶向治疗的分子基础</h3>
+      <p class="insight-card__text">
+        图中 <strong>EGFR → 非小细胞肺癌</strong> 这条边背后，是亚裔肺腺癌患者约 50% 的突变率。
+        吉非替尼、奥希替尼等 TKI 药物正是针对该靶点设计——一条边连接了基础研究与临床获益。
+      </p>
+    </div>
+
+    <div class="insight-card reveal">
+      <div class="insight-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a10 10 0 1 0 10 10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
+      <h3 class="insight-card__title">药物重定位线索</h3>
+      <p class="insight-card__text">
+        二甲双胍本用于降糖，却在图中同时连接到 <strong>2型糖尿病</strong> 与 <strong>心血管疾病</strong>。
+        知识图谱能系统挖掘这类"老药新用"，显著缩短药物研发周期。
+      </p>
+    </div>
+
+    <div class="insight-card reveal">
+      <div class="insight-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>
+        </svg>
+      </div>
+      <h3 class="insight-card__title">多病共存的网络结构</h3>
+      <p class="insight-card__text">
+        高血压、2型糖尿病与 ASCVD 在图中形成密集三角——
+        这正是临床上"代谢综合征"的网络化体现，提示治疗需多靶点协同。
+      </p>
+    </div>
+
+    <div class="insight-card reveal">
+      <div class="insight-card__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+          <path d="M14 3v6h6"/>
+        </svg>
+      </div>
+      <h3 class="insight-card__title">罕见病与精准医疗</h3>
+      <p class="insight-card__text">
+        80% 的罕见病由遗传因素导致。ASS1 → 瓜氨酸血症、CFTR → 囊性纤维化，
+        图中每个罕见病节点都对应着一条"基因—机制—药物"的精准干预路径。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- AI 应用 -->
+<section class="section" id="ai">
+  <div class="section__header reveal">
+    <span class="section__label">AI in Medicine</span>
+    <h2 class="section__title">知识图谱如何赋能医学 AI</h2>
+    <p class="section__desc">
+      在真实的医学人工智能系统中，知识图谱承担着"结构化医学常识"的角色，
+      为模型提供可解释的推理依据。
+    </p>
+  </div>
+
+  <div class="pipeline reveal">
+    <div class="pipeline__step">
+      <div class="pipeline__num">01</div>
+      <div class="pipeline__title">知识抽取</div>
+      <p class="pipeline__desc">从文献、电子病历、数据库中经 NLP 抽取实体与关系</p>
+    </div>
+    <div class="pipeline__step">
+      <div class="pipeline__num">02</div>
+      <div class="pipeline__title">实体链接</div>
+      <p class="pipeline__desc">将非结构化文本中的术语对齐到标准医学本体（UMLS/SNOMED）</p>
+    </div>
+    <div class="pipeline__step">
+      <div class="pipeline__num">03</div>
+      <div class="pipeline__title">图谱构建</div>
+      <p class="pipeline__desc">融合多源数据，构建疾病—基因—药物多模态关联网络</p>
+    </div>
+    <div class="pipeline__step">
+      <div class="pipeline__num">04</div>
+      <div class="pipeline__title">图神经网络</div>
+      <p class="pipeline__desc">GNN 学习节点表示，实现靶点预测与药物重定位</p>
+    </div>
+    <div class="pipeline__step">
+      <div class="pipeline__num">05</div>
+      <div class="pipeline__title">临床决策支持</div>
+      <p class="pipeline__desc">输出可解释的诊断建议，辅助医生制定个体化治疗方案</p>
+    </div>
+  </div>
+
+  <div class="insights" style="margin-top:44px">
+    <div class="insight-card reveal">
+      <h3 class="insight-card__title">可解释性</h3>
+      <p class="insight-card__text">
+        与传统黑箱模型不同，图谱推理路径本身就是解释依据：
+        "推荐该药物，因为它作用于致病基因 X"——医生可以验证每一步。
+      </p>
+    </div>
+    <div class="insight-card reveal">
+      <h3 class="insight-card__title">知识补全</h3>
+      <p class="insight-card__text">
+        TransE、RotatE 等图嵌入方法可预测缺失的关联边，
+        为新药靶点发现提供假设生成能力。
+      </p>
+    </div>
+    <div class="insight-card reveal">
+      <h3 class="insight-card__title">多模态融合</h3>
+      <p class="insight-card__text">
+        图谱可与影像组学、基因组学、电子病历联合建模，
+        构成"知识 + 数据"双驱动的医学 AI 架构。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<footer class="footer">
+  <div class="footer__title">BiomedKG</div>
+  <p class="footer__text">
+    数据整理自 DisGeNET、Open Targets、DrugBank、ClinVar 等公开生物医学数据库，
+    仅用于教学演示，不构成任何医疗建议。
+  </p>
+  <p class="footer__text">
+    医学人工智能课程作业 · 纯前端实现 · 无第三方框架依赖
+  </p>
+</footer>
+
+<script src="data/graph-data.js?v=20261108e"></script>
+<script src="js/barnes-hut.js?v=20261108e"></script>
+<script src="js/graph.js?v=20261108e"></script>
+<script src="js/extras.js?v=20261108e"></script>
+<script src="js/main.js?v=20261108e"></script>
+</body>
+</html>
