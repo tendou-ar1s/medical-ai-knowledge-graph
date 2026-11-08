@@ -125,6 +125,17 @@
       // 保证无头截图、后台标签页等场景也能看到图形
       this._render();
 
+      // 初始化后自适应视图：把节点铺满画布。
+      // 不这样做的话会用默认 scale=1，节点挤在中间一小块，看起来像「缩小版」。
+      // 延迟一点执行，等布局预热跑出合理分布后再算包围盒。
+      setTimeout(() => {
+        try {
+          this.fitView(this._isMobile ? 26 : 60);
+        } catch (e) {
+          console.warn('[graph] initial fitView failed', e);
+        }
+      }, this._isMobile ? 320 : 180);
+
       this._animate();
     }
 
@@ -134,6 +145,11 @@
       const cx = w / 2;
       const cy = h / 2;
       const radius = Math.min(w, h) * 0.32;
+
+      // 按画布宽高比拉伸：画布越扁，横向铺得越开，
+      // 否则所有节点会挤成一条竖线（边引力把大家往中间拽）。
+      const aspect = w / Math.max(h, 1);
+      const stretchX = Math.min(Math.max(aspect * 1.5, 1.2), 3.0);
 
       // 初始化节点位置：三种类型分居三个扇区，有利于形成清晰分簇
       const typeAngles = { disease: -Math.PI / 2, gene: Math.PI / 6, drug: Math.PI * 5 / 6 };
@@ -181,7 +197,7 @@
 
         return {
           ...n,
-          x: cx + Math.cos(angle + jitter) * r * (0.9 + Math.random() * 0.2),
+          x: cx + Math.cos(angle + jitter) * r * stretchX * (0.9 + Math.random() * 0.2),
           y: cy + Math.sin(angle + jitter) * r * (0.9 + Math.random() * 0.2),
           vx: 0,
           vy: 0,
@@ -235,6 +251,13 @@
         const cut = degs[Math.min(target, degs.length - 1)];
         this.degreeThreshold = Math.max(2, cut);
       }
+
+      // 已知名基因白名单（教科书级，如 TP53 / BRCA1 / EGFR）
+      // 这些基因即使在低度数时也优先显示，因为它们更容易被理解
+      this.famousGenes = new Set();
+      this.nodes.forEach(n => {
+        if (n.type === 'gene' && n.famous) this.famousGenes.add(n.id);
+      });
 
       // 初始化粒子（沿边流动的光点）
       this._initParticles();
@@ -615,11 +638,14 @@
 
       const w = maxX - minX + padding * 2;
       const h = maxY - minY + padding * 2;
-      const scale = Math.min(this.width / w, this.height / h, 1.6);
+      if (w <= 0 || h <= 0) return;
+
+      // 允许轻微放大，但不要把节点撑得过大
+      const scale = Math.min(this.width / w, this.height / h, 1.8);
       const cx2 = (minX + maxX) / 2;
       const cy2 = (minY + maxY) / 2;
 
-      const targetScale = Math.max(0.35, Math.min(3, scale));
+      const targetScale = Math.max(0.3, Math.min(3, scale));
       const targetX = this.width / 2 - cx2 * targetScale;
       const targetY = this.height / 2 - cy2 * targetScale;
 
@@ -659,6 +685,8 @@
     }
 
     _updateVisibility() {
+      const famous = this.famousGenes || new Set();
+
       this.nodes.forEach(n => {
         let visible = true;
         if (this.filter !== 'all' && n.type !== this.filter) visible = false;
@@ -666,8 +694,10 @@
           const hay = (n.name + ' ' + (n.en || '') + ' ' + (n.abbr || '') + ' ' + (n.desc || '')).toLowerCase();
           if (!hay.includes(this.searchTerm)) visible = false;
         }
-        // 度数阈值：大规模图谱下隐藏低相关性的边角节点
-        if (visible && this.degreeThreshold > 0 && n.degree < this.degreeThreshold) {
+        // 度数阈值：大规模图谱下隐藏低相关性的边角节点，
+        // 但知名基因（TP53/BRCA1 等）例外，它们更容易被理解
+        if (visible && this.degreeThreshold > 0 &&
+            n.degree < this.degreeThreshold && !famous.has(n.id)) {
           visible = false;
         }
         n.visible = visible;
@@ -799,6 +829,18 @@
         this._repulsionBarnesHut(nodes);
       }
 
+      // 各向异性铺展：宽画布下横向推得更用力，
+      // 抵消边引力把整团节点拉成竖条的倾向。
+      const aspectBoost = Math.min(this.width / Math.max(this.height, 1), 2.5);
+      if (aspectBoost > 1.1) {
+        const kx = (aspectBoost - 1) * 0.55;
+        for (let i = 0; i < n; i++) {
+          const nd = nodes[i];
+          const dx = nd.x - cx;
+          nd.vx += Math.sign(dx || (Math.random() - 0.5)) * Math.abs(dx / this.width) * kx * this.alpha;
+        }
+      }
+
       // 引力（沿边）
       this.links.forEach(l => {
         const a = l.sourceNode;
@@ -847,7 +889,8 @@
       const cyPad = this.height * 0.5;
       // 软边界：允许节点适度超出可视区，越界越深回拉越强。
       // 硬截断会把节点压成贴边的「条带」，是之前布局难看的根源。
-      const SOFT_RX = this.width * 0.55;
+      // 横向给更大范围，避免画布宽而节点堆成竖条。
+      const SOFT_RX = this.width * 0.72;
       const SOFT_RY = this.height * 0.55;
       // 硬上限：无论如何不能飞出这个范围（兜底，防意外）
       const HARD_RX = this.width * 1.6;

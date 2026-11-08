@@ -1969,22 +1969,26 @@ body {
    移动端优化 —— 触摸手势、布局重排、底部抽屉
    ============================================================ */
 
-/* 全局：禁止移动端的手势缩放与外部滚动干扰 */
+/*
+ * 滚动策略（重要）：
+ *   - 页面本身必须能正常上下滚动
+ *   - 只有在画布上做手势时才拦截，避免拖动图谱带着整页滚
+ *   因此这里不做全局 touch-action: none，只对 canvas 生效。
+ */
+
 html, body {
-  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* 保留惯性滚动，不要用 overflow: hidden 锁死页面 */
+  -webkit-overflow-scrolling: touch;
 }
 
-/* 画布区域：所有触摸手势由 canvas 自己接管 */
-.graph-stage {
+/* 画布区域：手势由 canvas 自己接管（只影响画布，不影响整页） */
+.graph-stage,
+#graphCanvas {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
-}
-
-#graphCanvas {
-  touch-action: none;
 }
 
 /* 移动端视图专用控件（桌面隐藏） */
