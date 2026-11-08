@@ -100,7 +100,7 @@
       return;
     }
 
-    // 按类型分组
+    // 按类型分组（只显示实际存在数据的类型）
     let html = '';
     ['disease', 'gene', 'drug'].forEach(type => {
       const group = results.filter(r => r.node.type === type);
@@ -271,8 +271,7 @@
     const segments = [
       { type: 'disease', value: counts.disease, color: '#ff5c8a' },
       { type: 'gene', value: counts.gene, color: '#4db8ff' },
-      { type: 'drug', value: counts.drug, color: '#ffc857' }
-    ];
+    ].filter(s => s.value > 0);   // 只画有数据的类型，避免出现空的扇区
 
     let startAngle = -Math.PI / 2;
     const gap = 0.028;
@@ -468,6 +467,9 @@
       }).join('');
     };
 
+    // 药物层：当前数据集可能不含药物节点，有数据才展示相关区块
+    const hasDrugLayer = aDrugs.size > 0 || bDrugs.size > 0;
+
     out.innerHTML = `
       <div class="compare-grid">
         <div class="compare-box">
@@ -485,6 +487,7 @@
               : '<div class="compare-none">两者无共同基因</div>'}
           </div>
         </div>
+        ${hasDrugLayer ? `
         <div class="compare-box">
           <div class="compare-box__title">${esc(a.name)} · 关联药物</div>
           <div class="compare-box__list">${tagHtml([...aDrugs], false)}</div>
@@ -499,7 +502,7 @@
             ${sharedDrugs.length ? tagHtml(sharedDrugs, true)
               : '<div class="compare-none">两者无共同药物</div>'}
           </div>
-        </div>
+        </div>` : ''}
       </div>
       ${sharedAll.length ? `
         <div style="margin-top:16px;padding:13px 16px;background:rgba(62,232,196,.07);border:1px solid rgba(62,232,196,.24);border-radius:8px;font-size:12.8px;color:var(--accent)">

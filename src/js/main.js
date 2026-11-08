@@ -58,13 +58,15 @@
     const donutNum = document.querySelector('.donut-center__num');
     if (donutNum) donutNum.textContent = d.nodes.length;
 
-    // 环形图图例数值
-    const legendVals = document.querySelectorAll('.donut-legend__val');
-    if (legendVals.length >= 3) {
-      legendVals[0].textContent = counts.disease;
-      legendVals[1].textContent = counts.gene;
-      legendVals[2].textContent = counts.drug;
-    }
+    // 环形图图例数值（只更新实际存在的项）
+    const legendMap = { disease: counts.disease, gene: counts.gene, drug: counts.drug };
+    document.querySelectorAll('.donut-legend__item').forEach(item => {
+      const v = item.querySelector('.donut-legend__val');
+      if (v) {
+        const t = item.dataset.type;
+        v.textContent = legendMap[t] != null ? legendMap[t] : 0;
+      }
+    });
 
     // 命令面板里的「全部节点」计数
     const cmdLabel = document.querySelector('.command-group-label');

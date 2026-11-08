@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261108e">
+<link rel="stylesheet" href="css/style.css?v=20261108f">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%233ee8c4' stroke-width='6'/><circle cx='50' cy='50' r='12' fill='%233ee8c4'/></svg>">
 </head>
 <body>
@@ -211,10 +211,6 @@
         <span class="graph-legend__dot" style="background:#4db8ff;box-shadow:0 0 10px rgba(77,184,255,0.8)"></span>
         基因 Gene
       </div>
-      <div class="graph-legend__item">
-        <span class="graph-legend__dot" style="background:#ffc857;box-shadow:0 0 10px rgba(255,200,87,0.8)"></span>
-        药物 Drug
-      </div>
     </div>
 
     <!-- 详情面板 -->
@@ -241,7 +237,7 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
         <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
       </svg>
-      <input type="text" id="commandInput" placeholder="搜索疾病、基因、药物…（支持中文、英文缩写）" autocomplete="off" spellcheck="false">
+      <input type="text" id="commandInput" placeholder="搜索疾病或基因…（支持中文、英文缩写）" autocomplete="off" spellcheck="false">
       <kbd class="command-panel__esc">ESC</kbd>
     </div>
     <div class="command-panel__body" id="commandResults"></div>
@@ -311,17 +307,12 @@
         <div class="donut-legend__item" data-type="disease">
           <span class="donut-legend__dot" style="background:#ff5c8a"></span>
           <span class="donut-legend__name">疾病</span>
-          <span class="donut-legend__val">11</span>
+          <span class="donut-legend__val">—</span>
         </div>
         <div class="donut-legend__item" data-type="gene">
           <span class="donut-legend__dot" style="background:#4db8ff"></span>
           <span class="donut-legend__name">基因</span>
-          <span class="donut-legend__val">18</span>
-        </div>
-        <div class="donut-legend__item" data-type="drug">
-          <span class="donut-legend__dot" style="background:#ffc857"></span>
-          <span class="donut-legend__name">药物</span>
-          <span class="donut-legend__val">21</span>
+          <span class="donut-legend__val">—</span>
         </div>
       </div>
     </div>
@@ -518,10 +509,10 @@
   </p>
 </footer>
 
-<script src="data/graph-data.js?v=20261108e"></script>
-<script src="js/barnes-hut.js?v=20261108e"></script>
-<script src="js/graph.js?v=20261108e"></script>
-<script src="js/extras.js?v=20261108e"></script>
-<script src="js/main.js?v=20261108e"></script>
+<script src="data/graph-data.js?v=20261108f"></script>
+<script src="js/barnes-hut.js?v=20261108f"></script>
+<script src="js/graph.js?v=20261108f"></script>
+<script src="js/extras.js?v=20261108f"></script>
+<script src="js/main.js?v=20261108f"></script>
 </body>
 </html>
