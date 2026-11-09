@@ -7,11 +7,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>BiomedKG · 生物医学知识图谱 | 医学人工智能</title>
-<meta name="description" content="基于知识图谱的疾病—基因—药物关联可视化平台，医学人工智能课程作业">
+<meta name="description" content="基于知识图谱的疾病—基因关联可视化平台，涵盖 199 种常见疾病与 800 个关键基因，医学人工智能课程作业">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261109b">
+<link rel="stylesheet" href="css/style.css?v=20261109d">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%233ee8c4' stroke-width='6'/><circle cx='50' cy='50' r='12' fill='%233ee8c4'/></svg>">
 </head>
 <body>
@@ -66,9 +66,9 @@
   </h1>
 
   <p class="hero__subtitle">
-    将 <strong>疾病</strong>、<strong>基因</strong>、<strong>药物</strong> 之间的复杂关联，
-    构建成一张可交互的知识网络。力导向布局展示真实生物学通路，
-    点击任意节点即可探索其背后的分子机制、临床证据与靶向治疗。
+    将 <strong>疾病</strong> 与 <strong>基因</strong> 之间的真实关联，
+    构建成一张可交互的知识网络。涵盖 199 种常见疾病、800 个关键基因，
+    点击任意节点即可查看疾病概述、分类、流行病学与关联的分子靶点。
   </p>
 
   <div class="hero__actions">
@@ -83,20 +83,20 @@
 
   <div class="hero__stats">
     <div class="hero__stat">
-      <div class="hero__stat-num" data-count="50">0</div>
+      <div class="hero__stat-num" data-count="999">0</div>
       <div class="hero__stat-label">知识节点</div>
     </div>
     <div class="hero__stat">
-      <div class="hero__stat-num" data-count="60">0</div>
+      <div class="hero__stat-num" data-count="2858">0</div>
       <div class="hero__stat-label">关联关系</div>
     </div>
     <div class="hero__stat">
-      <div class="hero__stat-num" data-count="11">0</div>
-      <div class="hero__stat-label">疾病类型</div>
+      <div class="hero__stat-num" data-count="199">0</div>
+      <div class="hero__stat-label">疾病种类</div>
     </div>
     <div class="hero__stat">
-      <div class="hero__stat-num" data-count="4">0</div>
-      <div class="hero__stat-label">数据库来源</div>
+      <div class="hero__stat-num" data-count="16">0</div>
+      <div class="hero__stat-label">疾病分类</div>
     </div>
   </div>
 
@@ -295,7 +295,7 @@
   <div class="stats-layout">
     <!-- 类型分布环形图 -->
     <div class="stat-card reveal">
-      <h3 class="stat-card__title">节点类型分布</h3>
+      <h3 class="stat-card__title">疾病分类分布 <span class="stat-card__sub">按人体系统</span></h3>
       <div class="donut-wrap">
         <canvas id="donutChart" width="260" height="260"></canvas>
         <div class="donut-center">
@@ -337,7 +337,7 @@
     <span class="section__label">Disease Comparison</span>
     <h2 class="section__title">疾病关联对比</h2>
     <p class="section__desc">
-      选择两种疾病，对比它们共享的基因与药物，发现潜在的共同机制与交叉治疗机会。
+      选择两种疾病，对比它们共享的致病基因，发现潜在的共同分子机制与治疗靶点。
     </p>
   </div>
 
@@ -383,8 +383,7 @@
       </div>
       <h3 class="insight-card__title">靶向治疗的分子基础</h3>
       <p class="insight-card__text">
-        图中 <strong>EGFR → 非小细胞肺癌</strong> 这条边背后，是亚裔肺腺癌患者约 50% 的突变率。
-        吉非替尼、奥希替尼等 TKI 药物正是针对该靶点设计——一条边连接了基础研究与临床获益。
+        图中 <strong>EGFR → 肺腺癌</strong> 这条边背后，是亚裔肺腺癌患者约 50% 的 EGFR 突变率。这个靶点的发现，让肺癌从「一刀切化疗」进入精准靶向治疗时代。
       </p>
     </div>
 
@@ -395,10 +394,9 @@
           <path d="M12 6v6l4 2"/>
         </svg>
       </div>
-      <h3 class="insight-card__title">药物重定位线索</h3>
+      <h3 class="insight-card__title">共病关系的分子基础</h3>
       <p class="insight-card__text">
-        二甲双胍本用于降糖，却在图中同时连接到 <strong>2型糖尿病</strong> 与 <strong>心血管疾病</strong>。
-        知识图谱能系统挖掘这类"老药新用"，显著缩短药物研发周期。
+        <strong>2型糖尿病</strong>、<strong>高血压</strong> 与 <strong>动脉粥样硬化</strong> 在图中通过共享的代谢通路基因相互连接——这正是临床上「代谢综合征」的网络化体现，提示治疗需多靶点协同。
       </p>
     </div>
 
@@ -412,7 +410,7 @@
       </div>
       <h3 class="insight-card__title">多病共存的网络结构</h3>
       <p class="insight-card__text">
-        高血压、2型糖尿病与 ASCVD 在图中形成密集三角——
+        高血压、2型糖尿病与动脉粥样硬化在图中形成密集三角——
         这正是临床上"代谢综合征"的网络化体现，提示治疗需多靶点协同。
       </p>
     </div>
@@ -424,10 +422,9 @@
           <path d="M14 3v6h6"/>
         </svg>
       </div>
-      <h3 class="insight-card__title">罕见病与精准医疗</h3>
+      <h3 class="insight-card__title">遗传病与精准医疗</h3>
       <p class="insight-card__text">
-        80% 的罕见病由遗传因素导致。ASS1 → 瓜氨酸血症、CFTR → 囊性纤维化，
-        图中每个罕见病节点都对应着一条"基因—机制—药物"的精准干预路径。
+        约 80% 的罕见病由遗传因素导致。图中 <strong>CFTR → 囊性纤维化</strong>、<strong>HBB → 地中海贫血</strong> 等组合，每个都对应着一条「基因缺陷 → 病理机制 → 干预靶点」的完整链路。
       </p>
     </div>
   </div>
@@ -509,10 +506,10 @@
   </p>
 </footer>
 
-<script src="data/graph-data.js?v=20261109b"></script>
-<script src="js/barnes-hut.js?v=20261109b"></script>
-<script src="js/graph.js?v=20261109b"></script>
-<script src="js/extras.js?v=20261109b"></script>
-<script src="js/main.js?v=20261109b"></script>
+<script src="data/graph-data.js?v=20261109d"></script>
+<script src="js/barnes-hut.js?v=20261109d"></script>
+<script src="js/graph.js?v=20261109d"></script>
+<script src="js/extras.js?v=20261109d"></script>
+<script src="js/main.js?v=20261109d"></script>
 </body>
 </html>

@@ -81,11 +81,7 @@ def classify(name: str) -> str:
 
 
 def compute_layout(nodes, links, width=2800, height=1600):
-    """
-    确定性环形布局（画布放大到 2800×1600，让节点分布稀疏）：
-      1. 疾病按系统分到 N 个扇区，内外双环交替
-      2. 基因放在它关联疾病的重心附近（外环）
-    """
+    """星云式散点布局"""
     diseases = [n for n in nodes if n["type"] == "disease"]
     all_genes = [n for n in nodes if n["type"] == "gene"]
 
@@ -100,7 +96,6 @@ def compute_layout(nodes, links, width=2800, height=1600):
     MIN_GENE_DEGREE = 2
     genes = [g for g in all_genes if gene_degree.get(g["id"], 0) >= MIN_GENE_DEGREE]
 
-    # 若仍超预算，按度数从高到低截断到 800 个
     GENE_BUDGET = 800
     if len(genes) > GENE_BUDGET:
         genes.sort(key=lambda g: gene_degree.get(g["id"], 0), reverse=True)
@@ -109,107 +104,97 @@ def compute_layout(nodes, links, width=2800, height=1600):
     keep_gene_ids = {g["id"] for g in genes}
     keep_node_ids = {d["id"] for d in diseases} | keep_gene_ids
 
-    print(f"  疾病 {len(diseases)} + 基因 {len(genes)}（原 {len(all_genes)}）= {len(nodes) - (len(all_genes) - len(genes))} 节点")
+    print(f"  疾病 {len(diseases)} + 基因 {len(genes)}（原 {len(all_genes)}）= {len(keep_node_ids)} 节点")
 
-    # 同步裁剪关联
     kept_links = [
         l for l in links
         if l["source"] in keep_gene_ids and l["target"] in keep_node_ids
     ]
-
-    # 原地修改 nodes / links
     nodes[:] = [n for n in nodes if n["id"] in keep_node_ids]
     links[:] = kept_links
 
-    # 按系统分组
+    # 重新取引用（nodes 已被替换）
+    diseases = [n for n in nodes if n["type"] == "disease"]
+
+    # 按系统分组（星云布局需要）
     groups = {}
     for d in diseases:
         sys_name = classify(d["name"])
         groups.setdefault(sys_name, []).append(d)
 
     sys_list = [s for s in SYSTEM_ORDER if s in groups]
-    n_sys = len(sys_list)
+
+    # ---- 星云分布 ----
+    # 不用规则的环形，改成多个自然聚集的「星团」：
+    # 每个疾病系统是一团，团与团之间错落分布，整体像星空。
+    import random
+    random.seed(20261109)      # 固定种子，保证布局可复现
 
     cx, cy = width / 2, height / 2
-    # 大幅拉开层次：疾病在内层环带，基因在外层环带，中间留空隙
-    R_inner = min(width, height) * 0.20    # 疾病内环
-    R_mid = min(width, height) * 0.36      # 疾病外环
-    R_gene_in = min(width, height) * 0.52  # 基因内圈
-    R_gene_out = min(width, height) * 0.68 # 基因外圈
 
-    # ---- 1. 疾病排布 ----
-    # 每个系统占一个扇区，扇区内的疾病分内外两圈错开，
-    # 避免所有疾病挤在同一条弧上导致标签重叠。
-    sector = (math.pi * 2) / max(n_sys, 1)
+    # 生成若干星团中心（错落分布，不是圆周）
+    n_clusters = max(len(sys_list), 9)
+    cluster_centers = []
+    for i in range(n_clusters):
+        # 用黄金角 + 随机扰动，形成自然的散落感
+        ang = i * 2.399963 + random.uniform(-0.5, 0.5)
+        rad = min(width, height) * random.uniform(0.10, 0.36)
+        cluster_centers.append({
+            "x": cx + math.cos(ang) * rad * 1.7,
+            "y": cy + math.sin(ang) * rad
+        })
+
+    # 疾病按系统分配到星团
+    sys_to_cluster = {}
     for si, sys_name in enumerate(sys_list):
-        members = groups[sys_name]
-        base = si * sector - math.pi / 2
-        span = sector * 0.92          # 留出扇区间隙
-        n_m = len(members)
+        sys_to_cluster[sys_name] = cluster_centers[si % n_clusters]
 
-        for i, d in enumerate(members):
-            t = (i + 0.5) / n_m
-            ang = base + (t - 0.5) * span
+    for d in diseases:
+        sys_name = classify(d["name"])
+        c = sys_to_cluster.get(sys_name) or cluster_centers[len(diseases) % n_clusters]
+        # 在星团内用高斯散布
+        gauss_r = min(width, height) * 0.085
+        d["x"] = c["x"] + random.gauss(0, gauss_r) * 1.5
+        d["y"] = c["y"] + random.gauss(0, gauss_r)
+        d["_ang"] = math.atan2(d["y"] - cy, d["x"] - cx)
 
-            # 内外圈交替：偶数在内圈，奇数在外圈
-            ring = i % 2
-            ring_r = R_inner if ring == 0 else R_mid
-            # 再按三档做半径细分，进一步散开
-            sub = (i // 2) % 3
-            r = ring_r + (sub - 1) * min(width, height) * 0.055
-
-            d["x"] = cx + math.cos(ang) * r
-            d["y"] = cy + math.sin(ang) * r
-            d["_ang"] = ang
-            d["_sys"] = sys_name
-
-    # ---- 2. 基因排布 ----
-    # 建疾病 -> 基因 的映射
+    # 基因：围绕它关联的疾病散开，形成星云的「尘埃」层
     disease_by_id = {d["id"]: d for d in diseases}
-    gene_anchor = {}
+    gene_anchors = {}
     for l in links:
-        src, tgt = l["source"], l["target"]
-        d = disease_by_id.get(tgt)
-        if not d or "_ang" not in d:
-            continue
-        gene_anchor.setdefault(src, []).append(d["_ang"])
+        d = disease_by_id.get(l["target"])
+        if d and "x" in d:
+            gene_anchors.setdefault(l["source"], []).append((d["x"], d["y"]))
 
     for gi, g in enumerate(genes):
-        angs = gene_anchor.get(g["id"])
-        if angs:
-            # 关联多个疾病：取角度平均（处理跨 0 度）
-            sx = sum(math.cos(a) for a in angs)
-            sy = sum(math.sin(a) for a in angs)
-            ang = math.atan2(sy, sx)
-            # 关联越多越靠内（但仍在外层环带内）
-            pull = min(len(angs) / 10, 1.0)
-            r = R_gene_out - (R_gene_out - R_gene_in) * pull
+        anchors = gene_anchors.get(g["id"])
+        if anchors:
+            ax = sum(a[0] for a in anchors) / len(anchors)
+            ay = sum(a[1] for a in anchors) / len(anchors)
+            # 离关联疾病越远越稀疏
+            spread = min(width, height) * (0.05 + min(len(anchors), 6) * 0.012)
+            g["x"] = ax + random.gauss(0, spread) * 1.5
+            g["y"] = ay + random.gauss(0, spread)
         else:
-            # 孤立基因：均匀撒在最外圈
-            ang = (gi / max(len(genes), 1)) * math.pi * 2
-            r = R_gene_out * 1.04
+            # 孤立基因：撒在整个画布的星空中
+            g["x"] = random.uniform(40, width - 40)
+            g["y"] = random.uniform(40, height - 40)
 
-        # 同半径重叠打散
-        jitter = ((gi * 2.399963) % (math.pi * 2)) * 0.08
-        g["x"] = cx + math.cos(ang + jitter) * r
-        g["y"] = cy + math.sin(ang + jitter) * r
-
+    # 按系统分组
+    groups = {}
     # ---- 3. 碰撞消解与收尾 ----
-    # 说明：全量 O(n²) 在 3000+ 节点上太慢。
-    # 前端默认只显示度数较高的核心节点，所以只对「会显示出来」的
-    # 疾病 + 高度数基因做精细碰撞消解，其余基因保持均匀分布即可。
+    # 星云布局追求「星星点点」的通透感，间距要够大。
     disease_by_id = {d["id"]: d for d in diseases}
     gene_degree = {}
     for l in links:
         gene_degree[l["source"]] = gene_degree.get(l["source"], 0) + 1
 
-    # 选出前端大概率会显示的基因（度数 >= 10）
-    focus_genes = [g for g in genes if gene_degree.get(g["id"], 0) >= 10]
+    focus_genes = [g for g in genes if gene_degree.get(g["id"], 0) >= 8]
     focus = diseases + focus_genes
 
     print(f"  精细排布节点: {len(diseases)} 疾病 + {len(focus_genes)} 高连接基因")
 
-    for _ in range(100):
+    for _ in range(90):
         moved = False
         for i in range(len(focus)):
             a = focus[i]
@@ -218,13 +203,12 @@ def compute_layout(nodes, links, width=2800, height=1600):
                 dx = b["x"] - a["x"]
                 dy = b["y"] - a["y"]
                 d2 = dx * dx + dy * dy
-                # 画布放大到 2 倍后，间距同步放大
                 if a["type"] == "disease" and b["type"] == "disease":
-                    min_d = 150
+                    min_d = 175
                 elif a["type"] == "disease" or b["type"] == "disease":
-                    min_d = 88
+                    min_d = 100
                 else:
-                    min_d = 54
+                    min_d = 62
                 if d2 < min_d * min_d:
                     d = math.sqrt(d2) or 0.01
                     push = (min_d - d) / 2

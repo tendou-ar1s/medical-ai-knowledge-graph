@@ -259,22 +259,40 @@
     canvas.style.height = size + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const counts = { disease: 0, gene: 0, drug: 0 };
-    allNodes.forEach(n => { if (counts[n.type] != null) counts[n.type]++; });
-    const total = allNodes.length;
+    // 按疾病分类统计（16 个系统），比只分「疾病/基因」更有信息量
+    const catCount = {};
+    allNodes.forEach(n => {
+      if (n.type === 'disease') {
+        const c = n.category || '其他';
+        catCount[c] = (catCount[c] || 0) + 1;
+      }
+    });
+
+    const totalDisease = Object.values(catCount).reduce((a, b) => a + b, 0);
+    const total = totalDisease || 1;
 
     const cx = size / 2;
     const cy = size / 2;
     const outerR = size * 0.42;
     const innerR = size * 0.28;
 
-    const segments = [
-      { type: 'disease', value: counts.disease, color: '#ff5c8a' },
-      { type: 'gene', value: counts.gene, color: '#4db8ff' },
-    ].filter(s => s.value > 0);   // 只画有数据的类型，避免出现空的扇区
+    // 分类配色（16 色轮转）
+    const PALETTE = [
+      '#ff5c8a', '#4db8ff', '#ffc857', '#3ee8c4', '#a78bfa',
+      '#fb7185', '#34d399', '#60a5fa', '#fbbf24', '#f472b6',
+      '#22d3ee', '#c084fc', '#4ade80', '#fb923c', '#94a3b8', '#e879f9'
+    ];
+
+    const segments = Object.entries(catCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({
+        type: name,
+        value,
+        color: PALETTE[i % PALETTE.length]
+      }));
 
     let startAngle = -Math.PI / 2;
-    const gap = 0.028;
+    const gap = 0.016;
 
     segments.forEach(seg => {
       const angle = (seg.value / total) * Math.PI * 2;
@@ -292,7 +310,7 @@
       ctx.fillStyle = grad;
 
       ctx.shadowColor = seg.color;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 12;
       ctx.fill();
       ctx.shadowBlur = 0;
 
@@ -305,6 +323,25 @@
     ctx.strokeStyle = 'rgba(62,232,196,0.12)';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // 把分类图例写进 DOM（替换原来的两项）
+    const legendEl = document.querySelector('.donut-legend');
+    if (legendEl) {
+      legendEl.innerHTML = segments.map(s => `
+        <div class="donut-legend__item" style="cursor:default">
+          <span class="donut-legend__dot" style="background:${s.color}"></span>
+          <span class="donut-legend__name" style="font-size:12px">${s.type}</span>
+          <span class="donut-legend__val">${s.value}</span>
+        </div>`).join('');
+      legendEl.style.maxHeight = '190px';
+      legendEl.style.overflowY = 'auto';
+    }
+
+    // 更新中心数字为「疾病总数」
+    const donutCenter = document.querySelector('.donut-center__num');
+    if (donutCenter) donutCenter.textContent = totalDisease;
+    const donutLabel = document.querySelector('.donut-center__label');
+    if (donutLabel) donutLabel.textContent = '种疾病';
   }
 
   function drawRankList() {

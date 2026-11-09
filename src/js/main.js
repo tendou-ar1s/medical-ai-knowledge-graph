@@ -38,13 +38,19 @@
     const counts = { disease: 0, gene: 0, drug: 0 };
     d.nodes.forEach(n => { if (counts[n.type] != null) counts[n.type]++; });
 
-    // Hero 四项统计
+    // 疾病分类数（按 category 字段统计）
+    const categories = new Set();
+    d.nodes.forEach(n => {
+      if (n.type === 'disease' && n.category) categories.add(n.category);
+    });
+
+    // Hero 四项统计：节点 / 关联 / 疾病 / 分类
     const heroNums = document.querySelectorAll('.hero__stat-num');
     if (heroNums.length >= 4) {
       heroNums[0].dataset.count = d.nodes.length;
       heroNums[1].dataset.count = d.links.length;
       heroNums[2].dataset.count = counts.disease;
-      heroNums[3].dataset.count = 4;
+      heroNums[3].dataset.count = categories.size || 4;
     }
 
     // 筛选器计数
@@ -147,24 +153,25 @@
       html += `
         <div class="detail-stats" style="margin-bottom:20px">
           <div class="detail-stat">
-            <div class="detail-stat__k">分类</div>
-            <div class="detail-stat__v">${node.category || '—'}</div>
+            <div class="detail-stat__k">疾病分类</div>
+            <div class="detail-stat__v">${node.category || '未分类'}</div>
           </div>
           <div class="detail-stat">
-            <div class="detail-stat__k">流行程度</div>
-            <div class="detail-stat__v" style="font-size:11.5px">${node.prevalence || '—'}</div>
+            <div class="detail-stat__k">流行病学</div>
+            <div class="detail-stat__v" style="font-size:11px;line-height:1.5">${node.prevalence || '暂无数据'}</div>
           </div>
         </div>`;
     } else if (node.type === 'gene') {
+      const deg = relations.filter(r => r.node.type === 'disease').length;
       html += `
         <div class="detail-stats" style="margin-bottom:20px">
           <div class="detail-stat">
-            <div class="detail-stat__k">染色体定位</div>
-            <div class="detail-stat__v">${node.chromosome || '—'}</div>
+            <div class="detail-stat__k">关联疾病数</div>
+            <div class="detail-stat__v">${deg} 种</div>
           </div>
           <div class="detail-stat">
-            <div class="detail-stat__k">关联数</div>
-            <div class="detail-stat__v">${relations.length}</div>
+            <div class="detail-stat__k">基因类型</div>
+            <div class="detail-stat__v" style="font-size:11px">${node.famous ? '★ 经典标志基因' : 'protein_coding'}</div>
           </div>
         </div>`;
     } else {
@@ -181,12 +188,22 @@
         </div>`;
     }
 
-    // 概述
-    if (node.desc) {
+    // 概述（优先中文，兜底英文）
+    const descText = node.descZh || node.desc || '';
+    if (descText) {
       html += `
         <div class="detail-block">
-          <div class="detail-block__label">概述</div>
-          <div class="detail-block__text">${node.desc}</div>
+          <div class="detail-block__label">疾病概述</div>
+          <div class="detail-block__text">${descText}</div>
+        </div>`;
+    }
+
+    // 基因英文全名（放在概述后，作为补充信息）
+    if (node.type === 'gene' && node.en) {
+      html += `
+        <div class="detail-block">
+          <div class="detail-block__label">基因全称</div>
+          <div class="detail-block__text" style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${node.en}</div>
         </div>`;
     }
 
