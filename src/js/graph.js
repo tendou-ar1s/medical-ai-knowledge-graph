@@ -1207,9 +1207,9 @@
           strokeW = 0.6 + l.strength * 0.06;
         }
 
-        // 线宽补偿：放大时线不跟着变粗，保持屏幕上的视觉粗细一致
+        // 线宽补偿：让连线在屏幕上保持恒定粗细（放大时不会变成粗线）
         if (view.scale > 1) {
-          strokeW /= Math.pow(view.scale, 0.75);
+          strokeW /= view.scale;
         }
 
         ctx.beginPath();
@@ -1317,13 +1317,15 @@
         else if (isHov) radius *= 1.24;
         else if (inPath) radius *= 1.18;
 
-        // 缩放补偿策略：
-        //   放大时节点在屏幕上要变「大」但不要失控。
-        //   用 scale^0.45 的次线性增长 —— 放大 8 倍时节点屏幕半径约 35px，
-        //   既清晰又不会占满屏幕。
+        // 缩放补偿策略（关键）：
+        //   节点的「屏幕尺寸」必须保持恒定，放大只是把节点之间的距离拉开，
+        //   这样放大后才能看清「小区域内的节点关系」，而不是看到几个巨大的色块。
+        //   由于绘制时已经 apply 了 ctx.scale(view.scale)，
+        //   所以世界坐标半径要除以 scale 才能抵消。
+        //   额外做一个轻微衰减（scale^-0.08），让近距离时节点略微收一点，更清爽。
         const zs = view.scale;
         if (zs > 1) {
-          radius *= Math.pow(zs, 0.45);
+          radius /= Math.pow(zs, 1.08);
         } else if (zs < 1) {
           // 缩小视图：节点适度放大，避免变成看不清的小点
           radius *= Math.min(1.7, 1 / Math.pow(zs, 0.5));
@@ -1365,7 +1367,7 @@
           ctx.beginPath();
           ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
           ctx.strokeStyle = this._hexAlpha(color.main, 0.9);
-          ctx.lineWidth = 0.9 / Math.max(1, Math.pow(view.scale, 0.7));
+          ctx.lineWidth = 0.9 / Math.max(1, view.scale);
           ctx.stroke();
         } else {
           // 桌面端 / 选中态：保留完整渐变效果
@@ -1423,7 +1425,7 @@
 
         // 描边（主体圆已在上面画好，这里只描边）
         // 高倍放大时保持屏幕像素粗细恒定，边缘更干净
-        const strokeScale = Math.max(1, Math.pow(view.scale, 0.7));
+        const strokeScale = Math.max(1, view.scale);
         if (inPath) {
           ctx.strokeStyle = '#7dffe0';
           ctx.lineWidth = 2.8 / strokeScale;
@@ -1451,46 +1453,41 @@
         }
 
         // 标签显示策略
-        // 缩放越小，门槛越高（避免拥挤）；放大后节点稀疏，可显示更多标签。
+        // 节点屏幕尺寸已恒定，缩放只影响「视野内能看到多少节点」。
+        // 缩小时节点密集，只显示疾病名；放大后节点稀疏，可显示更多。
         const scale = view.scale;
         let showLabel;
         if (inPath || isSel || isHov) {
           showLabel = true;
         } else if (n.type === 'disease') {
-          // 疾病名：任何缩放级别都尽量显示（放大后门槛降低）
-          showLabel = this._isMobile
-            ? (scale > 2.5 ? screenR >= 3 : screenR >= 5.5)
-            : (scale > 2 ? screenR >= 2.5 : screenR >= 4);
+          // 疾病名：任何缩放级别都显示（它们是图中骨架）
+          showLabel = true;
         } else if (n.type === 'gene') {
-          // 基因名：高倍放大后也显示（此时节点稀疏，有空间）
-          if (scale > 5) {
-            showLabel = screenR >= 3;
-          } else if (scale > 2.5) {
-            showLabel = screenR >= 4 && n.degree >= 6;
+          // 基因名：放大到一定程度才显示（此时视野内节点少，有空间）
+          if (scale > 6) {
+            showLabel = true;
+          } else if (scale > 3) {
+            showLabel = n.degree >= 5;
+          } else if (scale > 1.5) {
+            showLabel = n.degree >= 12;
           } else {
-            showLabel = !this._isMobile && scale > 1.5 && screenR >= 3.5;
+            showLabel = false;
           }
         } else {
-          showLabel = scale > 2 || (!this._isMobile && screenR >= 5);
+          showLabel = scale > 3;
         }
 
         if (showLabel) {
-          // 字号策略：
-          //   世界坐标下的字号 = 屏幕目标字号 / scale。
-          //   默认目标是 11.5px（屏幕）。放大时逐步提高到 17px，
-          //   让「近距离观察」时文字也跟着变大更清晰。
+          // 字号策略：屏幕上保持恒定 11.5px（与节点大小一致的原则）。
+          // 世界坐标字号 = 屏幕字号 / scale，这样放大缩小文字看起来一样大。
           const zs2 = view.scale;
-          let screenFontSize = 11.5;
-          if (zs2 > 1) {
-            // scale 1→16 时，屏幕字号从 11.5 平滑增长到 17
-            screenFontSize = 11.5 + Math.min(5.5, Math.log2(zs2) * 1.5);
-          }
-          const fontSize = screenFontSize / Math.max(zs2, 0.65);
+          const screenFontSize = 11.5;
+          const fontSize = screenFontSize / Math.max(zs2, 0.5);
           ctx.font = `600 ${fontSize}px "Inter", "Noto Sans SC", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
 
-          const labelY = n.y + radius + 7 / zs2;
+          const labelY = n.y + radius + 6 / zs2;
           const text = n.name;
 
           // ---- 标签防重叠 ----
