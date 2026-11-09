@@ -506,7 +506,7 @@
         const my = e.clientY - rect.top;
 
         const zoomFactor = e.deltaY < 0 ? 1.09 : 0.917;
-        const newScale = Math.max(0.32, Math.min(3.2, this.view.scale * zoomFactor));
+        const newScale = Math.max(0.25, Math.min(16, this.view.scale * zoomFactor));
 
         // 以鼠标位置为中心缩放
         const ratio = newScale / this.view.scale;
@@ -566,7 +566,7 @@
           const newDist = getDist(e.touches[0], e.touches[1]);
           if (pinchStart.dist < 1) return;
           const ratio = newDist / pinchStart.dist;
-          const newScale = Math.max(0.3, Math.min(4.5, pinchStart.scale * ratio));
+          const newScale = Math.max(0.25, Math.min(16, pinchStart.scale * ratio));
 
           // 围绕捏合中点缩放
           const k = newScale / pinchStart.scale;
@@ -1207,6 +1207,11 @@
           strokeW = 0.6 + l.strength * 0.06;
         }
 
+        // 线宽补偿：放大时线不跟着变粗，保持屏幕上的视觉粗细一致
+        if (view.scale > 1) {
+          strokeW /= Math.pow(view.scale, 0.75);
+        }
+
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         // 轻微曲线让图更有层次
@@ -1312,12 +1317,13 @@
         else if (isHov) radius *= 1.24;
         else if (inPath) radius *= 1.18;
 
-        // 缩放补偿：放大时节点相对屏幕变小，让「拉近后间距更大」更明显；
-        // 缩小时节点不要小到看不见，做适度放大补偿。
+        // 缩放补偿策略：
+        //   放大时节点在屏幕上要变「大」但不要失控。
+        //   用 scale^0.45 的次线性增长 —— 放大 8 倍时节点屏幕半径约 35px，
+        //   既清晰又不会占满屏幕。
         const zs = view.scale;
         if (zs > 1) {
-          // 放大视图：节点半径适度收缩（但不小于 55%），视觉上拉开间距
-          radius *= Math.max(0.55, 1 / Math.pow(zs, 0.42));
+          radius *= Math.pow(zs, 0.45);
         } else if (zs < 1) {
           // 缩小视图：节点适度放大，避免变成看不清的小点
           radius *= Math.min(1.7, 1 / Math.pow(zs, 0.5));
@@ -1355,10 +1361,11 @@
           }
 
           // 4) 描边：让边缘清晰，避免糊成色块
+          //    线宽按屏幕像素保持恒定（放大时变细，避免边缘过粗）
           ctx.beginPath();
           ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
           ctx.strokeStyle = this._hexAlpha(color.main, 0.9);
-          ctx.lineWidth = 0.9;
+          ctx.lineWidth = 0.9 / Math.max(1, Math.pow(view.scale, 0.7));
           ctx.stroke();
         } else {
           // 桌面端 / 选中态：保留完整渐变效果
@@ -1415,12 +1422,14 @@
         }
 
         // 描边（主体圆已在上面画好，这里只描边）
+        // 高倍放大时保持屏幕像素粗细恒定，边缘更干净
+        const strokeScale = Math.max(1, Math.pow(view.scale, 0.7));
         if (inPath) {
           ctx.strokeStyle = '#7dffe0';
-          ctx.lineWidth = 2.8;
+          ctx.lineWidth = 2.8 / strokeScale;
         } else {
           ctx.strokeStyle = isSel ? '#ffffff' : this._hexAlpha(color.main, 0.85);
-          ctx.lineWidth = isSel ? 2.4 : 1.1;
+          ctx.lineWidth = (isSel ? 2.4 : 1.1) / strokeScale;
         }
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
@@ -1441,27 +1450,47 @@
           ctx.stroke();
         }
 
-        // 标签显示策略：移动端只显示疾病名，且必须足够大
+        // 标签显示策略
+        // 缩放越小，门槛越高（避免拥挤）；放大后节点稀疏，可显示更多标签。
         const scale = view.scale;
         let showLabel;
         if (inPath || isSel || isHov) {
           showLabel = true;
         } else if (n.type === 'disease') {
-          // 移动端门槛更高，避免标签糊成一片
-          showLabel = this._isMobile ? screenR >= 5.5 : screenR >= 4;
+          // 疾病名：任何缩放级别都尽量显示（放大后门槛降低）
+          showLabel = this._isMobile
+            ? (scale > 2.5 ? screenR >= 3 : screenR >= 5.5)
+            : (scale > 2 ? screenR >= 2.5 : screenR >= 4);
         } else if (n.type === 'gene') {
-          showLabel = !this._isMobile && scale > 1.5 && screenR >= 3.5;
+          // 基因名：高倍放大后也显示（此时节点稀疏，有空间）
+          if (scale > 5) {
+            showLabel = screenR >= 3;
+          } else if (scale > 2.5) {
+            showLabel = screenR >= 4 && n.degree >= 6;
+          } else {
+            showLabel = !this._isMobile && scale > 1.5 && screenR >= 3.5;
+          }
         } else {
-          showLabel = !this._isMobile && screenR >= 5;
+          showLabel = scale > 2 || (!this._isMobile && screenR >= 5);
         }
 
         if (showLabel) {
-          const fontSize = Math.max(9.5, 11.5 / Math.max(view.scale, 0.65));
+          // 字号策略：
+          //   世界坐标下的字号 = 屏幕目标字号 / scale。
+          //   默认目标是 11.5px（屏幕）。放大时逐步提高到 17px，
+          //   让「近距离观察」时文字也跟着变大更清晰。
+          const zs2 = view.scale;
+          let screenFontSize = 11.5;
+          if (zs2 > 1) {
+            // scale 1→16 时，屏幕字号从 11.5 平滑增长到 17
+            screenFontSize = 11.5 + Math.min(5.5, Math.log2(zs2) * 1.5);
+          }
+          const fontSize = screenFontSize / Math.max(zs2, 0.65);
           ctx.font = `600 ${fontSize}px "Inter", "Noto Sans SC", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
 
-          const labelY = n.y + radius + 7 / view.scale;
+          const labelY = n.y + radius + 7 / zs2;
           const text = n.name;
 
           // ---- 标签防重叠 ----
