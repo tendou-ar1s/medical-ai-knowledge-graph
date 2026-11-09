@@ -198,13 +198,21 @@
         </div>`;
     }
 
-    // 基因英文全名（放在概述后，作为补充信息）
-    if (node.type === 'gene' && node.en) {
-      html += `
-        <div class="detail-block">
-          <div class="detail-block__label">基因全称</div>
-          <div class="detail-block__text" style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${node.en}</div>
-        </div>`;
+    // 基因：不重复显示全名（标题下方已经有），改为显示关联疾病的评分分布说明
+    if (node.type === 'gene') {
+      const relDiseases = (relations || []).filter(r => r.node.type === 'disease');
+      if (relDiseases.length) {
+        const top = relDiseases[0];
+        html += `
+          <div class="detail-block">
+            <div class="detail-block__label">关联强度说明</div>
+            <div class="detail-block__text">
+              该基因与 <strong>${relDiseases.length}</strong> 种疾病存在关联，
+              其中最强的是 <strong>${top.node.name}</strong>
+              （评分 ${(top.strength / 10).toFixed(3)}，越高代表证据越充分）。
+            </div>
+          </div>`;
+      }
     }
 
     // 机制/功能
@@ -270,11 +278,16 @@
             ${relations.map(r => {
               const rc = TYPE_CONFIG[r.node.type] || TYPE_CONFIG.gene;
               const arrow = r.direction === 'out' ? '→' : '←';
+              // 评分归一化到 0-100%（strength 是 0-10）
+              const pct = Math.max(6, Math.min(100, (r.strength || 1) * 10));
               return `
                 <div class="rel-item" data-node-id="${r.node.id}">
                   <div class="rel-item__top">
                     <span class="rel-item__name">${arrow} ${r.node.name}</span>
                     <span class="rel-item__tag" style="background:${rc.bg};color:${rc.color}">${r.relation}</span>
+                  </div>
+                  <div class="rel-item__meter">
+                    <div class="rel-item__meter-fill" style="width:${pct}%;background:linear-gradient(90deg, ${rc.color}66, ${rc.color})"></div>
                   </div>
                   <div class="rel-item__evidence">${r.evidence || ''}</div>
                 </div>`;
@@ -286,6 +299,13 @@
     bodyEl.innerHTML = html;
     bodyEl.scrollTop = 0;
     panel.classList.add('open');
+
+    // 移动端：显示背景遮罩 + 锁定背景滚动
+    const backdrop = document.getElementById('detailBackdrop');
+    if (window.innerWidth <= 768) {
+      if (backdrop) backdrop.classList.add('show');
+      document.body.classList.add('panel-open');
+    }
 
     // 关联项点击跳转
     bodyEl.querySelectorAll('.rel-item').forEach(item => {
@@ -312,11 +332,67 @@
     // 暴露实例，便于调试与外部功能模块调用
     window.__graph = graph;
 
-    // 关闭面板
-    document.getElementById('detailClose').addEventListener('click', () => {
+    // ---- 关闭面板：三种方式（右上角 ✕ / 底部按钮 / 点遮罩）----
+    function closePanel() {
       graph.clearSelection();
       showDetail(null);
-    });
+      const bd = document.getElementById('detailBackdrop');
+      if (bd) bd.classList.remove('show');
+      document.body.classList.remove('panel-open');
+    }
+
+    document.getElementById('detailClose')?.addEventListener('click', closePanel);
+    document.getElementById('detailCloseBottom')?.addEventListener('click', closePanel);
+
+    // 点遮罩关闭
+    document.getElementById('detailBackdrop')?.addEventListener('click', closePanel);
+
+    // ---- 移动端：下滑抽屉关闭 + 拖拽把手 ----
+    const panel = document.getElementById('detailPanel');
+    const handle = document.getElementById('detailHandle');
+    if (panel && handle) {
+      let dragStartY = 0;
+      let dragDelta = 0;
+      let dragging = false;
+
+      const onStart = (e) => {
+        const t = e.touches ? e.touches[0] : e;
+        dragStartY = t.clientY;
+        dragDelta = 0;
+        dragging = true;
+        panel.style.transition = 'none';
+      };
+
+      const onMove = (e) => {
+        if (!dragging) return;
+        const t = e.touches ? e.touches[0] : e;
+        dragDelta = Math.max(0, t.clientY - dragStartY);
+        // 跟随手指下移，带阻尼
+        panel.style.transform = `translateY(${dragDelta * 0.85}px)`;
+      };
+
+      const onEnd = () => {
+        if (!dragging) return;
+        dragging = false;
+        panel.style.transition = '';
+        panel.style.transform = '';
+        // 下拉超过 90px 就关闭
+        if (dragDelta > 90) {
+          closePanel();
+        }
+        dragDelta = 0;
+      };
+
+      handle.addEventListener('touchstart', onStart, { passive: true });
+      handle.addEventListener('touchmove', onMove, { passive: true });
+      handle.addEventListener('touchend', onEnd);
+      handle.addEventListener('touchcancel', onEnd);
+
+      // 鼠标也支持（桌面调试）
+      handle.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+    }
 
     // 过滤器
     document.querySelectorAll('.filter-chip').forEach(chip => {

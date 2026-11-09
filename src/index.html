@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261109d">
+<link rel="stylesheet" href="css/style.css?v=20261109e">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%233ee8c4' stroke-width='6'/><circle cx='50' cy='50' r='12' fill='%233ee8c4'/></svg>">
 </head>
 <body>
@@ -213,15 +213,36 @@
       </div>
     </div>
 
+    <!-- 移动端：面板打开时的背景遮罩 -->
+    <div class="detail-backdrop" id="detailBackdrop"></div>
+
     <!-- 详情面板 -->
     <aside class="detail-panel" id="detailPanel">
+      <!-- 移动端拖拽把手（桌面隐藏） -->
+      <div class="detail-panel__handle" id="detailHandle">
+        <span></span>
+      </div>
+
       <div class="detail-panel__head">
-        <span class="detail-panel__type" id="detailType"></span>
+        <div class="detail-panel__head-row">
+          <span class="detail-panel__type" id="detailType"></span>
+          <button class="detail-panel__close" id="detailClose" aria-label="关闭">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+              <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+            <span class="detail-panel__close-text">关闭</span>
+          </button>
+        </div>
         <h3 class="detail-panel__title" id="detailTitle"></h3>
         <p class="detail-panel__en" id="detailEn"></p>
-        <button class="detail-panel__close" id="detailClose" aria-label="关闭">✕</button>
       </div>
+
       <div class="detail-panel__body" id="detailBody"></div>
+
+      <!-- 移动端底部固定操作条 -->
+      <div class="detail-panel__footer">
+        <button class="detail-btn-close" id="detailCloseBottom">关闭详情</button>
+      </div>
     </aside>
 
     <div class="graph-stage__hint">
@@ -506,10 +527,10 @@
   </p>
 </footer>
 
-<script src="data/graph-data.js?v=20261109d"></script>
-<script src="js/barnes-hut.js?v=20261109d"></script>
-<script src="js/graph.js?v=20261109d"></script>
-<script src="js/extras.js?v=20261109d"></script>
-<script src="js/main.js?v=20261109d"></script>
+<script src="data/graph-data.js?v=20261109e"></script>
+<script src="js/barnes-hut.js?v=20261109e"></script>
+<script src="js/graph.js?v=20261109e"></script>
+<script src="js/extras.js?v=20261109e"></script>
+<script src="js/main.js?v=20261109e"></script>
 </body>
 </html>

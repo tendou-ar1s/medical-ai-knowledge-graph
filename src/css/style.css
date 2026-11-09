@@ -2742,3 +2742,526 @@ html, body {
     box-sizing: border-box;
   }
 }
+
+/* ============================================================
+   移动端详情面板：底部抽屉 + 醒目的关闭交互
+   ============================================================ */
+
+/* 桌面端：把手和底部按钮隐藏 */
+.detail-panel__handle,
+.detail-panel__footer,
+.detail-panel__close-text {
+  display: none;
+}
+
+/* 详情面板头部：类型标签和关闭按钮同一行 */
+.detail-panel__head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* 关闭按钮（桌面端保持原样，只是移入 flex 行内） */
+.detail-panel__close {
+  position: static;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+
+  /* ---------- 面板本体：底部抽屉 ---------- */
+  .detail-panel {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 68dvh;
+    border-left: none;
+    border-top: 1px solid var(--border-bright);
+    border-radius: 22px 22px 0 0;
+    transform: translateY(110%);
+    transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    /* 向下滑动手势关闭 */
+    touch-action: pan-y;
+    z-index: 60;
+  }
+
+  .detail-panel.open {
+    transform: translateY(0);
+  }
+
+  /* ---------- 顶部拖拽把手 ---------- */
+  .detail-panel__handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0 6px;
+    cursor: grab;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .detail-panel__handle span {
+    width: 42px;
+    height: 4.5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.28);
+    transition: background 0.2s ease;
+  }
+
+  .detail-panel__handle:active span {
+    background: rgba(62, 232, 196, 0.7);
+  }
+
+  /* ---------- 头部 ---------- */
+  .detail-panel__head {
+    padding: 4px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .detail-panel__head-row {
+    margin-bottom: 10px;
+  }
+
+  .detail-panel__type {
+    font-size: 11px;
+    padding: 5px 12px;
+    margin-bottom: 0;
+  }
+
+  /* 关闭按钮：大触控区 + 高对比度 */
+  .detail-panel__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: auto;
+    min-width: 44px;
+    height: 34px;
+    padding: 0 12px 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 92, 138, 0.45);
+    background: rgba(255, 92, 138, 0.14);
+    color: #ff8fab;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.18s ease;
+  }
+
+  .detail-panel__close:active {
+    background: rgba(255, 92, 138, 0.32);
+    border-color: var(--color-disease);
+    color: #fff;
+    transform: scale(0.94);
+  }
+
+  /* 显示「关闭」文字 */
+  .detail-panel__close-text {
+    display: inline;
+    font-size: 12.5px;
+    letter-spacing: 0.5px;
+  }
+
+  .detail-panel__title {
+    font-size: 1.35rem;
+    padding-right: 0;
+    margin-bottom: 4px;
+  }
+
+  .detail-panel__en {
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  /* ---------- 内容区 ---------- */
+  .detail-panel__body {
+    padding: 16px 18px 24px;
+    overflow-y: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 内容不足时也保留滚动提示空间 */
+  .detail-panel__body::after {
+    content: '';
+    display: block;
+    height: 8px;
+  }
+
+  /* ---------- 底部固定操作条 ---------- */
+  .detail-panel__footer {
+    display: block;
+    padding: 10px 18px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: rgba(8, 13, 24, 0.98);
+    flex-shrink: 0;
+  }
+
+  .detail-btn-close {
+    width: 100%;
+    height: 46px;
+    border-radius: 12px;
+    border: 1px solid var(--border-bright);
+    background: rgba(62, 232, 196, 0.12);
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .detail-btn-close:active {
+    background: rgba(62, 232, 196, 0.28);
+    transform: scale(0.98);
+  }
+
+  /* ---------- 面板打开时，下方的图谱遮罩提示 ---------- */
+  .detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 6, 11, 0.55);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    z-index: 55;
+  }
+
+  .detail-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ---------- 关联列表项：更大的触控区 ---------- */
+  .rel-item {
+    padding: 14px 14px;
+    min-height: 56px;
+  }
+
+  .rel-item__name {
+    font-size: 14.5px;
+  }
+
+  .rel-item__evidence {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* 关联条目区加「可点击」暗示 */
+  .rel-item::after {
+    content: '›';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  .rel-item {
+    position: relative;
+    padding-right: 30px;
+  }
+}
+
+/* 桌面端隐藏遮罩 */
+.detail-backdrop {
+  display: none;
+}
+
+/* ============================================================
+   关联强度进度条
+   ============================================================ */
+
+.rel-item__meter {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 7px 0 6px;
+  overflow: hidden;
+}
+
+.rel-item__meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 768px) {
+  .rel-item__meter {
+    height: 4px;
+    margin: 8px 0 7px;
+  }
+}
+
+/* ============================================================
+   移动端图谱区：更清晰的交互引导
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  /* 图谱画布：留出底部空间给图例 */
+  .graph-stage {
+    height: calc(100dvh - 250px);
+    min-height: 380px;
+  }
+
+  /* 图例：改为左下角紧凑横排，不挡节点 */
+  .graph-legend {
+    bottom: 10px;
+    left: 10px;
+    transform: none;
+    padding: 7px 11px;
+    gap: 10px;
+    font-size: 10px;
+    border-radius: 10px;
+  }
+
+  /* 移动端浮动按钮：加大到标准触控尺寸 */
+  .mobile-controls {
+    gap: 9px;
+    top: 10px;
+    right: 10px;
+  }
+
+  .mob-btn {
+    width: 44px;
+    height: 44px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
+
+  .mob-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  /* 「点击查看」引导提示：首次进入时浮动显示 */
+  .graph-stage__hint {
+    display: block;
+    bottom: 10px;
+    right: 10px;
+    left: auto;
+    transform: none;
+    font-size: 10.5px;
+    padding: 6px 12px;
+    max-width: 46%;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  /* 工具栏按钮：统一 44px 触控高度 */
+  .tool-btn {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .degree-select {
+    min-height: 44px;
+    font-size: 12.5px;
+  }
+
+  .filter-chip {
+    min-height: 40px;
+    font-size: 12px;
+  }
+}
+
+/* 面板打开时，禁止背景滚动（避免误触） */
+body.panel-open {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  body.panel-open {
+    position: fixed;
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   移动端详情面板：修复横向溢出
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .detail-panel {
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .detail-panel__head,
+  .detail-panel__body,
+  .detail-panel__footer {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .detail-panel__head-row {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* 关闭按钮不超出右边界 */
+  .detail-panel__close {
+    margin-right: 0;
+    flex-shrink: 0;
+  }
+
+  /* 标题和文字不撑宽 */
+  .detail-panel__title,
+  .detail-panel__en,
+  .detail-block__text,
+  .rel-item__name,
+  .rel-item__evidence {
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* 关联列表项内容不溢出 */
+  .rel-item {
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .rel-item__top {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .rel-item__tag {
+    flex-shrink: 0;
+  }
+
+  /* 信息卡不溢出 */
+  .detail-stats {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .detail-stat {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .detail-stat__v {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ============================================================
+   移动端详情面板：最终修复（不透明背景 + 正确宽度）
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  /* 面板必须完全不透明，否则会透出背后的图谱 */
+  .detail-panel {
+    background: #0a111c !important;
+    background-image: linear-gradient(175deg, #0d1626 0%, #070c15 100%) !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    left: 0 !important;
+    right: auto !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 头部完全占满，关闭按钮贴右 */
+  .detail-panel__head {
+    padding: 4px 16px 14px !important;
+    background: transparent;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .detail-panel__head-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 10px;
+  }
+
+  /* 关闭按钮：固定尺寸，不再被挤压 */
+  .detail-panel__close {
+    position: static !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 78px !important;
+    height: 36px !important;
+    padding: 0 14px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 92, 138, 0.5) !important;
+    background: rgba(255, 92, 138, 0.16) !important;
+    color: #ff8fab !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+  }
+
+  .detail-panel__close-text {
+    display: inline !important;
+    font-size: 13px !important;
+  }
+
+  /* 内容区：不透明 + 正确内边距 */
+  .detail-panel__body {
+    background: transparent;
+    padding: 16px 16px 20px !important;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* 底部按钮条：不透明 */
+  .detail-panel__footer {
+    background: #070c15 !important;
+    border-top: 1px solid rgba(78, 112, 158, 0.28);
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* 把手区域背景 */
+  .detail-panel__handle {
+    background: transparent;
+  }
+
+  /* 确保所有子元素不超出 */
+  .detail-panel * {
+    box-sizing: border-box;
+  }
+}
+
+/* 面板宽度用百分比而非 vw，避免滚动条宽度导致的溢出 */
+@media (max-width: 768px) {
+  .detail-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
