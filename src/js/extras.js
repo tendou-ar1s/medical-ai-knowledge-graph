@@ -251,12 +251,19 @@
     const canvas = document.getElementById('donutChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+
+    // 关键修复：用容器实际尺寸绘制，保证正圆不被拉伸
+    const wrap = canvas.parentElement;
+    const cssSize = wrap ? Math.min(wrap.clientWidth, wrap.clientHeight) : 260;
+    const size = cssSize > 40 ? cssSize : 260;
+
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const size = 260;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
     canvas.style.width = size + 'px';
     canvas.style.height = size + 'px';
+    // 强制等比例，避免被 CSS flex/grid 拉伸成椭圆
+    canvas.style.aspectRatio = '1 / 1';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // 按疾病分类统计（16 个系统），比只分「疾病/基因」更有信息量

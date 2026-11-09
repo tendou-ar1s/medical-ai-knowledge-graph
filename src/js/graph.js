@@ -98,12 +98,39 @@
         this.data.meta && this.data.meta.layout === 'static-radial';
 
       if (hasPrecomputed) {
-        // 数据自带确定性布局坐标（按疾病系统分区的环形布局）
+        // 数据自带确定性布局坐标
         // 物理模拟完全不需要跑：直接冻结，画面立刻定格。
         this._freezeLayout();
-        this.view.x = 0;
-        this.view.y = 0;
-        this.view.scale = 1;
+
+        const W = this.width;
+        const H = this.height;
+
+        if (this._isMobile) {
+          // 手机屏幕小，全量总览会挤成一团，但放大过头又会只剩几个节点。
+          // 1.25 倍是「能看到一片区域、节点间距舒适」的平衡点。
+          const targetScale = 1.25;
+
+          // 用可见节点的包围盒中心，而不是算术重心（重心会被密集区拉偏）
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          this.nodes.forEach(nd => {
+            if (!nd.visible) return;
+            if (nd.x < minX) minX = nd.x;
+            if (nd.x > maxX) maxX = nd.x;
+            if (nd.y < minY) minY = nd.y;
+            if (nd.y > maxY) maxY = nd.y;
+          });
+          const cX = isFinite(minX) ? (minX + maxX) / 2 : W / 2;
+          const cY = isFinite(minY) ? (minY + maxY) / 2 : H / 2;
+
+          this.view.scale = targetScale;
+          this.view.x = W / 2 - cX * targetScale;
+          this.view.y = H / 2 - cY * targetScale;
+        } else {
+          this.view.x = 0;
+          this.view.y = 0;
+          this.view.scale = 1;
+        }
+
         this._render();
         this._animate();
         return;
@@ -262,9 +289,13 @@
         let py;
 
         if (hasPrecomputed && typeof n.x === 'number' && typeof n.y === 'number') {
-          // 直接用预计算的静态坐标，按画布尺寸等比映射
-          px = (n.x / LW) * w;
-          py = (n.y / LH) * h;
+          // 预计算坐标按「保持宽高比」映射到画布，避免手机窄屏把画面压扁。
+          // 等比缩放取较小值，再居中偏移。
+          const k = Math.min(w / LW, h / LH);
+          const offX = (w - LW * k) / 2;
+          const offY = (h - LH * k) / 2;
+          px = offX + n.x * k;
+          py = offY + n.y * k;
         } else {
           // 兜底：分类型 + 分层的径向分布
           const t = total > 1 ? idx / (total - 1) : 0.5;
@@ -286,10 +317,13 @@
           vx: 0,
           vy: 0,
           degree,
-          // 球体整体缩小：静态布局下画布已放大，节点不需要那么大
-          radius: n.type === 'disease' ? 5.2 + Math.min(degree, 12) * 0.38
-                : n.type === 'gene' ? 2.6 + Math.min(degree, 10) * 0.42
-                : 3.5 + Math.min(degree, 10) * 0.5,
+          // 球体尺寸：移动端再缩小一档，配合更高的缩放级别
+          radius: this._isMobile
+            ? (n.type === 'disease' ? 3.6 + Math.min(degree, 12) * 0.26
+               : 1.9 + Math.min(degree, 10) * 0.3)
+            : (n.type === 'disease' ? 5.2 + Math.min(degree, 12) * 0.38
+               : n.type === 'gene' ? 2.6 + Math.min(degree, 10) * 0.42
+               : 3.5 + Math.min(degree, 10) * 0.5),
           baseRadius: 0,
           visible: true,
           opacity: 1
@@ -324,16 +358,16 @@
         this.adjacency.get(l.target)?.add(l.source);
       });
 
-      // 度数筛选：总节点已控制在 1000 左右，默认几乎全部展示
+      // 度数筛选：移动端和不桌面显示不同数量
       this.degreeThreshold = 0;
-      if (this.nodes.length > 600) {
+      if (this.nodes.length > 400) {
         const degs = this.nodes.map(n => n.degree).sort((a, b) => b - a);
-        // 桌面显示约 700 个（几乎全部），移动端约 300 个
+        // 手机屏幕小，显示太多必然重叠。移动端只保留约 90 个节点。
         const target = this._isMobile
-          ? Math.min(300, Math.floor(this.nodes.length * 0.35))
-          : Math.min(700, Math.floor(this.nodes.length * 0.75));
+          ? Math.min(90, Math.floor(this.nodes.length * 0.09))
+          : Math.min(500, Math.floor(this.nodes.length * 0.55));
         const cut = degs[Math.min(target, degs.length - 1)];
-        this.degreeThreshold = Math.max(1, cut);
+        this.degreeThreshold = Math.max(this._isMobile ? 8 : 2, cut);
       }
 
       // 已知名基因白名单（教科书级，如 TP53 / BRCA1 / EGFR）
@@ -1278,26 +1312,54 @@
         else if (isHov) radius *= 1.24;
         else if (inPath) radius *= 1.18;
 
+        // 缩放补偿：放大时节点相对屏幕变小，让「拉近后间距更大」更明显；
+        // 缩小时节点不要小到看不见，做适度放大补偿。
+        const zs = view.scale;
+        if (zs > 1) {
+          // 放大视图：节点半径适度收缩（但不小于 55%），视觉上拉开间距
+          radius *= Math.max(0.55, 1 / Math.pow(zs, 0.42));
+        } else if (zs < 1) {
+          // 缩小视图：节点适度放大，避免变成看不清的小点
+          radius *= Math.min(1.7, 1 / Math.pow(zs, 0.5));
+        }
+
         ctx.globalAlpha = dimmed ? (hasPath ? 0.1 : 0.16) : 1;
 
-        // ---- 移动端极简渲染模式 ----
-        // 手机 GPU 扛不住每个节点 2~3 次 createRadialGradient，
-        // 775 个节点 = 近 2000 次渐变对象创建，会直接卡死。
-        // 移动端改成纯色圆 + 简单描边，视觉损失很小但性能提升 10 倍以上。
+        // ---- 移动端精简渲染 ----
+        // 手机 GPU 扛不住每个节点 2~3 次渐变，但纯色圆又显得生硬。
+        // 折中：用「半透明光晕 + 实心圆 + 亮色描边」三层结构，
+        // 视觉上仍有立体感，但只用到 fillStyle/arc，开销极低。
         if (this._isMobile && !isSel && !isHov && !inPath) {
-          // 简单的发光：一个半透明的稍大圆（只用 fillStyle，无渐变）
-          if (!tinyNode && n.degree >= 8) {
+          // 1) 柔和光晕：低透明度的大圆，边缘自然消隐
+          if (!tinyNode) {
             ctx.beginPath();
-            ctx.arc(n.x, n.y, radius * 1.7, 0, Math.PI * 2);
+            ctx.arc(n.x, n.y, radius * 2.1, 0, Math.PI * 2);
             ctx.fillStyle = color.dim;
-            ctx.globalAlpha = (dimmed ? 0.06 : 0.3);
+            ctx.globalAlpha = dimmed ? 0.04 : 0.22;
             ctx.fill();
             ctx.globalAlpha = dimmed ? (hasPath ? 0.1 : 0.16) : 1;
           }
+
+          // 2) 主体：实心圆
           ctx.beginPath();
           ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
           ctx.fillStyle = color.main;
           ctx.fill();
+
+          // 3) 高光：左上角的小圆，制造球体感（比渐变省得多）
+          if (!tinyNode && radius > 2.4) {
+            ctx.beginPath();
+            ctx.arc(n.x - radius * 0.3, n.y - radius * 0.3, radius * 0.42, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+            ctx.fill();
+          }
+
+          // 4) 描边：让边缘清晰，避免糊成色块
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+          ctx.strokeStyle = this._hexAlpha(color.main, 0.9);
+          ctx.lineWidth = 0.9;
+          ctx.stroke();
         } else {
           // 桌面端 / 选中态：保留完整渐变效果
           if (tinyNode && !inPath && !isSel) {
@@ -1379,21 +1441,18 @@
           ctx.stroke();
         }
 
-        // 标签显示策略
-        // 静态布局下画面不缩放，所以按「绝对可读性」判断：
-        // 疾病名几乎总是显示（它们是骨架），基因名只在节点足够大时显示。
+        // 标签显示策略：移动端只显示疾病名，且必须足够大
         const scale = view.scale;
         let showLabel;
         if (inPath || isSel || isHov) {
           showLabel = true;
         } else if (n.type === 'disease') {
-          // 疾病节点：屏幕上半径够大就显示名字
-          showLabel = screenR >= 4.5;
+          // 移动端门槛更高，避免标签糊成一片
+          showLabel = this._isMobile ? screenR >= 5.5 : screenR >= 4;
         } else if (n.type === 'gene') {
-          // 基因节点：只有度数很高或放大后才显示
-          showLabel = (n.degree >= 10 && screenR >= 5) || scale > 1.6;
+          showLabel = !this._isMobile && scale > 1.5 && screenR >= 3.5;
         } else {
-          showLabel = screenR >= 5;
+          showLabel = !this._isMobile && screenR >= 5;
         }
 
         if (showLabel) {
@@ -1409,11 +1468,13 @@
           // 记录已绘制标签的包围盒，重叠时跳过（选中/悬停的强制绘制）
           if (!isSel && !isHov && !inPath && labelBoxes) {
             const tw = ctx.measureText(text).width;
+            // 加一点间隙容差，避免标签「贴边粘连」看着糊
+            const pad = this._isMobile ? 3 : 1.5;
             const box = {
-              x1: n.x - tw / 2,
-              x2: n.x + tw / 2,
-              y1: labelY,
-              y2: labelY + fontSize
+              x1: n.x - tw / 2 - pad,
+              x2: n.x + tw / 2 + pad,
+              y1: labelY - pad,
+              y2: labelY + fontSize + pad
             };
             let clash = false;
             for (let bi = 0; bi < labelBoxes.length; bi++) {
