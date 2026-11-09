@@ -80,15 +80,46 @@ def classify(name: str) -> str:
     return "其他"
 
 
-def compute_layout(nodes, links, width=1400, height=800):
+def compute_layout(nodes, links, width=2800, height=1600):
     """
-    确定性环形布局：
-      1. 疾病按系统分到 N 个扇区
-      2. 每个系统占一个扇区，疾病均匀分布在该扇区的中环
-      3. 基因放在它关联疾病的重心附近（外环）
+    确定性环形布局（画布放大到 2800×1600，让节点分布稀疏）：
+      1. 疾病按系统分到 N 个扇区，内外双环交替
+      2. 基因放在它关联疾病的重心附近（外环）
     """
     diseases = [n for n in nodes if n["type"] == "disease"]
-    genes = [n for n in nodes if n["type"] == "gene"]
+    all_genes = [n for n in nodes if n["type"] == "gene"]
+
+    # ---- 基因裁剪：只保留关联度足够高的基因 ----
+    # 全量 2971 个基因里绝大多数只关联 1 个疾病，对理解图谱没帮助，
+    # 反而把画面挤满。这里只留「度数 >= 2」的基因，
+    # 总数控制在 1000 节点左右（199 疾病 + 约 800 基因）。
+    gene_degree = {}
+    for l in links:
+        gene_degree[l["source"]] = gene_degree.get(l["source"], 0) + 1
+
+    MIN_GENE_DEGREE = 2
+    genes = [g for g in all_genes if gene_degree.get(g["id"], 0) >= MIN_GENE_DEGREE]
+
+    # 若仍超预算，按度数从高到低截断到 800 个
+    GENE_BUDGET = 800
+    if len(genes) > GENE_BUDGET:
+        genes.sort(key=lambda g: gene_degree.get(g["id"], 0), reverse=True)
+        genes = genes[:GENE_BUDGET]
+
+    keep_gene_ids = {g["id"] for g in genes}
+    keep_node_ids = {d["id"] for d in diseases} | keep_gene_ids
+
+    print(f"  疾病 {len(diseases)} + 基因 {len(genes)}（原 {len(all_genes)}）= {len(nodes) - (len(all_genes) - len(genes))} 节点")
+
+    # 同步裁剪关联
+    kept_links = [
+        l for l in links
+        if l["source"] in keep_gene_ids and l["target"] in keep_node_ids
+    ]
+
+    # 原地修改 nodes / links
+    nodes[:] = [n for n in nodes if n["id"] in keep_node_ids]
+    links[:] = kept_links
 
     # 按系统分组
     groups = {}
@@ -100,9 +131,11 @@ def compute_layout(nodes, links, width=1400, height=800):
     n_sys = len(sys_list)
 
     cx, cy = width / 2, height / 2
-    R_inner = min(width, height) * 0.16    # 疾病内环
+    # 大幅拉开层次：疾病在内层环带，基因在外层环带，中间留空隙
+    R_inner = min(width, height) * 0.20    # 疾病内环
     R_mid = min(width, height) * 0.36      # 疾病外环
-    R_gene = min(width, height) * 0.47     # 基因层
+    R_gene_in = min(width, height) * 0.52  # 基因内圈
+    R_gene_out = min(width, height) * 0.68 # 基因外圈
 
     # ---- 1. 疾病排布 ----
     # 每个系统占一个扇区，扇区内的疾病分内外两圈错开，
@@ -148,16 +181,16 @@ def compute_layout(nodes, links, width=1400, height=800):
             sx = sum(math.cos(a) for a in angs)
             sy = sum(math.sin(a) for a in angs)
             ang = math.atan2(sy, sx)
-            # 关联越多越靠内
-            pull = min(len(angs) / 8, 1.0)
-            r = R_gene * (1.0 - pull * 0.34)
+            # 关联越多越靠内（但仍在外层环带内）
+            pull = min(len(angs) / 10, 1.0)
+            r = R_gene_out - (R_gene_out - R_gene_in) * pull
         else:
-            # 孤立基因：均匀撒在外圈
+            # 孤立基因：均匀撒在最外圈
             ang = (gi / max(len(genes), 1)) * math.pi * 2
-            r = R_gene * 1.06
+            r = R_gene_out * 1.04
 
         # 同半径重叠打散
-        jitter = ((gi * 2.399963) % (math.pi * 2)) * 0.06
+        jitter = ((gi * 2.399963) % (math.pi * 2)) * 0.08
         g["x"] = cx + math.cos(ang + jitter) * r
         g["y"] = cy + math.sin(ang + jitter) * r
 
@@ -185,12 +218,13 @@ def compute_layout(nodes, links, width=1400, height=800):
                 dx = b["x"] - a["x"]
                 dy = b["y"] - a["y"]
                 d2 = dx * dx + dy * dy
+                # 画布放大到 2 倍后，间距同步放大
                 if a["type"] == "disease" and b["type"] == "disease":
-                    min_d = 76
+                    min_d = 150
                 elif a["type"] == "disease" or b["type"] == "disease":
-                    min_d = 44
+                    min_d = 88
                 else:
-                    min_d = 28
+                    min_d = 54
                 if d2 < min_d * min_d:
                     d = math.sqrt(d2) or 0.01
                     push = (min_d - d) / 2
@@ -253,8 +287,12 @@ def main():
         n["x"] = round(n.get("x", 0), 1)
         n["y"] = round(n.get("y", 0), 1)
     data["meta"]["layout"] = "static-radial"
-    data["meta"]["layoutWidth"] = 1400
-    data["meta"]["layoutHeight"] = 800
+    data["meta"]["layoutWidth"] = 2800
+    data["meta"]["layoutHeight"] = 1600
+    data["meta"]["diseases"] = sum(1 for n in data["nodes"] if n["type"] == "disease")
+    data["meta"]["genes"] = sum(1 for n in data["nodes"] if n["type"] == "gene")
+    data["meta"]["links"] = len(data["links"])
+    data["meta"]["total"] = len(data["nodes"])
 
     out = "// 数据来源：Open Targets Platform (https://platform.opentargets.org)\n"
     out += "// 自动生成，请勿手工编辑。重新生成：python scripts/convert_data.py\n"

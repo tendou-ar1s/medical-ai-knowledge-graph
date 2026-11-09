@@ -286,10 +286,10 @@
           vx: 0,
           vy: 0,
           degree,
-          // 疾病节点略大于基因，保持视觉层级但避免过大导致重叠
-          radius: n.type === 'disease' ? 7 + Math.min(degree, 12) * 0.55
-                : n.type === 'gene' ? 3.5 + Math.min(degree, 10) * 0.6
-                : 5 + Math.min(degree, 10) * 0.7,
+          // 球体整体缩小：静态布局下画布已放大，节点不需要那么大
+          radius: n.type === 'disease' ? 5.2 + Math.min(degree, 12) * 0.38
+                : n.type === 'gene' ? 2.6 + Math.min(degree, 10) * 0.42
+                : 3.5 + Math.min(degree, 10) * 0.5,
           baseRadius: 0,
           visible: true,
           opacity: 1
@@ -324,16 +324,16 @@
         this.adjacency.get(l.target)?.add(l.source);
       });
 
-      // 大规模图谱：默认只展示关联度较高的核心网络，避免「毛线球」
+      // 度数筛选：总节点已控制在 1000 左右，默认几乎全部展示
       this.degreeThreshold = 0;
-      if (this.nodes.length > 800) {
+      if (this.nodes.length > 600) {
         const degs = this.nodes.map(n => n.degree).sort((a, b) => b - a);
-        // 静态布局下节点少才看得清标签：桌面 ~120 个，移动端 ~55 个
+        // 桌面显示约 700 个（几乎全部），移动端约 300 个
         const target = this._isMobile
-          ? Math.min(55, Math.floor(this.nodes.length * 0.02))
-          : Math.min(120, Math.floor(this.nodes.length * 0.05));
+          ? Math.min(300, Math.floor(this.nodes.length * 0.35))
+          : Math.min(700, Math.floor(this.nodes.length * 0.75));
         const cut = degs[Math.min(target, degs.length - 1)];
-        this.degreeThreshold = Math.max(4, cut);
+        this.degreeThreshold = Math.max(1, cut);
       }
 
       // 已知名基因白名单（教科书级，如 TP53 / BRCA1 / EGFR）
@@ -1137,15 +1137,15 @@
           alpha = inPath ? 0.95 : 0.045;
           strokeW = inPath ? 3.2 : 0.7;
         } else if (selId) {
-          alpha = isHighlighted ? 0.78 : 0.05;
-          strokeW = isHighlighted ? 2.0 + l.strength * 0.16 : 0.9 + l.strength * 0.1;
+          alpha = isHighlighted ? 0.78 : 0.04;
+          strokeW = isHighlighted ? 2.0 + l.strength * 0.16 : 0.8 + l.strength * 0.08;
         } else if (hoverId) {
-          alpha = isHovered ? 0.6 : 0.1;
-          strokeW = isHovered ? 2.0 + l.strength * 0.16 : 0.9 + l.strength * 0.1;
+          alpha = isHovered ? 0.55 : 0.06;
+          strokeW = isHovered ? 2.0 + l.strength * 0.16 : 0.8 + l.strength * 0.08;
         } else {
-          // 常态下连线要清晰可见：强关联更亮
-          alpha = 0.26 + Math.min(l.strength, 10) / 10 * 0.22;
-          strokeW = 0.9 + l.strength * 0.1;
+          // 常态连线：整体调淡，避免画面被线条填满，突出节点与标签
+          alpha = 0.10 + Math.min(l.strength, 10) / 10 * 0.12;
+          strokeW = 0.6 + l.strength * 0.06;
         }
 
         ctx.beginPath();
@@ -1208,12 +1208,18 @@
       }
 
       // ---- 3. 绘制节点 ----
-      // 先画未选中的，再画选中/悬停的（层叠在上）
+      // 排序策略：疾病优先（标签先占位），然后基因，最后选中的置顶。
+      // 这样标签防重叠时，疾病名不会被基因名挤掉。
       const sorted = [...this.nodes].sort((a, b) => {
-        const aScore = (a.id === selId ? 2 : 0) + (a.id === hoverId ? 1 : 0);
-        const bScore = (b.id === selId ? 2 : 0) + (b.id === hoverId ? 1 : 0);
+        const aScore = (a.id === selId ? 3 : 0) + (a.id === hoverId ? 2 : 0)
+                     + (a.type === 'disease' ? 1 : 0);
+        const bScore = (b.id === selId ? 3 : 0) + (b.id === hoverId ? 2 : 0)
+                     + (b.type === 'disease' ? 1 : 0);
         return aScore - bScore;
       });
+
+      // 标签占用区域，用于防重叠
+      const labelBoxes = [];
 
       sorted.forEach(n => {
         if (!n.visible) return;
@@ -1353,6 +1359,31 @@
 
           const labelY = n.y + radius + 7 / view.scale;
           const text = n.name;
+
+          // ---- 标签防重叠 ----
+          // 记录已绘制标签的包围盒，重叠时跳过（选中/悬停的强制绘制）
+          if (!isSel && !isHov && !inPath && labelBoxes) {
+            const tw = ctx.measureText(text).width;
+            const box = {
+              x1: n.x - tw / 2,
+              x2: n.x + tw / 2,
+              y1: labelY,
+              y2: labelY + fontSize
+            };
+            let clash = false;
+            for (let bi = 0; bi < labelBoxes.length; bi++) {
+              const b = labelBoxes[bi];
+              if (!(box.x2 < b.x1 || box.x1 > b.x2 || box.y2 < b.y1 || box.y1 > b.y2)) {
+                clash = true;
+                break;
+              }
+            }
+            if (clash) {
+              ctx.globalAlpha = 1;
+              return;
+            }
+            labelBoxes.push(box);
+          }
 
           // 文字描边保证可读
           ctx.strokeStyle = 'rgba(5, 8, 15, 0.92)';
