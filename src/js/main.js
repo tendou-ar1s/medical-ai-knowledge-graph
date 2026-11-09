@@ -329,9 +329,9 @@
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting && graph) {
-          // 进入视野时重新校准画布尺寸（此时布局已完成，尺寸最准确）
+          // 进入视野时校准画布尺寸（静态布局下只重绘，不重排）
           graph._resize();
-          graph.alpha = Math.max(graph.alpha, 0.28);
+          graph.requestRender();
         }
       });
     }, { threshold: 0.12 });
@@ -342,7 +342,7 @@
     window.addEventListener('load', () => {
       if (graph) {
         graph._resize();
-        graph.alpha = Math.max(graph.alpha, 0.18);
+        graph.requestRender();
       }
     });
 

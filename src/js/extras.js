@@ -543,8 +543,8 @@
       openModal('pathModal');
     });
     document.getElementById('btnFit')?.addEventListener('click', () => {
+      // 只调整视角，不触发重新布局
       graph.fitView();
-      graph.alpha = Math.max(graph.alpha, 0.1);
     });
     document.getElementById('btnReset')?.addEventListener('click', () => {
       graph.resetView();

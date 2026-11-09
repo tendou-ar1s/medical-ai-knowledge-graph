@@ -91,14 +91,35 @@
       window.addEventListener('resize', this._resize);
       this._bindEvents();
 
-      // ---- 预跑物理模拟，让布局快速收敛 ----
-      // 关键：分「小批多次」执行，每批之后让出主线程。
-      // 用 setTimeout(0) 而不是 requestIdleCallback —— 后者在页面繁忙时可能永不触发，
-      // 且部分浏览器实现差异大（Edge 移动版曾出现预热卡住的情况）。
+      // ---- 布局准备 ----
       const n = this.nodes.length;
       const isMobile = this._isMobile;
-      const warmup = isMobile ? (n > 600 ? 4 : 15) : (n > 1500 ? 30 : (n > 600 ? 70 : 200));
-      const BATCH = isMobile ? 1 : 10;
+      const hasPrecomputed =
+        this.data.meta && this.data.meta.layout === 'static-radial';
+
+      if (hasPrecomputed) {
+        // 数据自带确定性布局坐标（按疾病系统分区的环形布局）
+        // 物理模拟完全不需要跑：直接冻结，画面立刻定格。
+        this._freezeLayout();
+        this.view.x = 0;
+        this.view.y = 0;
+        this.view.scale = 1;
+        this._render();
+        this._animate();
+        return;
+      }
+
+      // ---- 兜底：预跑物理模拟，把布局一次性算好 ----
+      // 分批执行避免阻塞主线程（用 setTimeout 而不是 requestIdleCallback，
+      // 后者在页面繁忙时可能永不触发）。
+      // 步数给足：静态布局只有这一次机会，收敛得越充分越好看
+      const warmup = isMobile
+        ? (n > 1500 ? 90 : 180)
+        : (n > 1500 ? 260 : 400);
+      const BATCH = isMobile ? 6 : 16;
+
+      // 让温度衰减更慢，保证足够的迭代次数走得动
+      this.alphaDecay = 0.008;
 
       let done = 0;
       const runBatch = () => {
@@ -109,32 +130,88 @@
             if (this.alpha < this.alphaMin) break;
           }
         } catch (err) {
-          // 预热出错不能影响主流程
           console.warn('[graph] warmup step failed', err);
+          this._finishWarmup();
           return;
         }
+
         if (done < warmup && this.alpha >= this.alphaMin) {
           this._warmupTimer = setTimeout(runBatch, 0);
+        } else {
+          this._finishWarmup();
         }
       };
+
+      // 预热完成后：归一化坐标 → 冻结布局 → 自适应视图
+      this._finishWarmup = () => {
+        // 把剩余温度一次性耗尽
+        this.alpha = 0;
+
+        // ---- 布局后处理：经纬度归一化 + 均匀展开 ----
+        try {
+          const visible = this.nodes.filter(nd => nd.visible);
+
+          if (visible.length) {
+            // 1) 先按可见节点的包围盒做线性映射
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            visible.forEach(nd => {
+              minX = Math.min(minX, nd.x);
+              maxX = Math.max(maxX, nd.x);
+              minY = Math.min(minY, nd.y);
+              maxY = Math.max(maxY, nd.y);
+            });
+            const spanX = Math.max(maxX - minX, 1);
+            const spanY = Math.max(maxY - minY, 1);
+            const padX = this.width * 0.07;
+            const padY = this.height * 0.07;
+            const usableW = this.width - padX * 2;
+            const usableH = this.height - padY * 2;
+
+            // 保持纵横比地缩放，并居中
+            const k = Math.min(usableW / spanX, usableH / spanY);
+            const drawW = spanX * k;
+            const drawH = spanY * k;
+            const offX = padX + (usableW - drawW) / 2;
+            const offY = padY + (usableH - drawH) / 2;
+
+            visible.forEach(nd => {
+              nd.x = offX + (nd.x - minX) * k;
+              nd.y = offY + (nd.y - minY) * k;
+            });
+
+            // 2) 二次均衡：把节点从中心向外做轻微径向展开，
+            //    避免中间过密、边缘过空。
+            const cx0 = this.width / 2;
+            const cy0 = this.height / 2;
+            const maxR = Math.min(usableW, usableH) / 2;
+
+            visible.forEach(nd => {
+              const dx = nd.x - cx0;
+              const dy = nd.y - cy0;
+              const r = Math.hypot(dx, dy) || 1;
+              const nr = maxR * Math.pow(Math.min(r / maxR, 1), 0.88);
+              nd.x = cx0 + (dx / r) * nr;
+              nd.y = cy0 + (dy / r) * nr;
+            });
+          }
+        } catch (e) {
+          console.warn('[graph] normalize failed', e);
+        }
+
+        this._freezeLayout();
+
+        // 坐标已铺满画布，视图归位即可
+        this.view.x = 0;
+        this.view.y = 0;
+        this.view.scale = 1;
+        this.requestRender();
+      };
+
+      this.alpha = Math.max(this.alpha, 0.9);
       runBatch();
 
-      this.alpha = Math.max(this.alpha, n > 1500 ? 0.5 : 0.22);
-
-      // 立即同步绘制首帧：不依赖 requestAnimationFrame，
-      // 保证无头截图、后台标签页等场景也能看到图形
+      // 立即同步绘制首帧，保证无头截图等场景也能看到图形
       this._render();
-
-      // 初始化后自适应视图：把节点铺满画布。
-      // 不这样做的话会用默认 scale=1，节点挤在中间一小块，看起来像「缩小版」。
-      // 延迟一点执行，等布局预热跑出合理分布后再算包围盒。
-      setTimeout(() => {
-        try {
-          this.fitView(this._isMobile ? 26 : 60);
-        } catch (e) {
-          console.warn('[graph] initial fitView failed', e);
-        }
-      }, this._isMobile ? 320 : 180);
 
       this._animate();
     }
@@ -167,6 +244,12 @@
         degreeMap.set(l.target, (degreeMap.get(l.target) || 0) + 1);
       });
 
+      // 数据里是否带了预计算布局坐标（静态环形布局）
+      const hasPrecomputed =
+        this.data.meta && this.data.meta.layout === 'static-radial';
+      const LW = hasPrecomputed ? (this.data.meta.layoutWidth || 1400) : 0;
+      const LH = hasPrecomputed ? (this.data.meta.layoutHeight || 800) : 0;
+
       this.nodes = this.data.nodes.map((n, i) => {
         const baseAngle = typeAngles[n.type] ?? 0;
         const idx = typeCounts[n.type]++;
@@ -175,30 +258,31 @@
         // 度数直接查表，O(1)
         const degree = degreeMap.get(n.id) || 0;
 
-        // 分类型 + 分层的径向初始分布：
-        // 高连接度的节点靠近中心，低连接度的铺在外圈，
-        // 同类型占据一个扇区，避免所有点挤在同一环上。
-        const t = total > 1 ? idx / (total - 1) : 0.5;
+        let px;
+        let py;
 
-        // 扇区内的角度：给每个类型留出约 110° 的范围
-        const sectorSpan = Math.PI * 0.62;
-        const angle = baseAngle + (t - 0.5) * sectorSpan;
-
-        // 半径分层：按度数分成若干圈，高连接度在内
-        const rings = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(total) / 2)));
-        const ringIdx = idx % rings;
-        const ringRatio = rings > 1 ? ringIdx / (rings - 1) : 0.5;
-
-        // 基础半径从 0.32R 到 1.0R
-        const r = radius * (0.32 + ringRatio * 0.68);
-
-        // 同一圈内再按序号做角度微扰，打散规则网格感
-        const jitter = (Math.random() - 0.5) * 0.14;
+        if (hasPrecomputed && typeof n.x === 'number' && typeof n.y === 'number') {
+          // 直接用预计算的静态坐标，按画布尺寸等比映射
+          px = (n.x / LW) * w;
+          py = (n.y / LH) * h;
+        } else {
+          // 兜底：分类型 + 分层的径向分布
+          const t = total > 1 ? idx / (total - 1) : 0.5;
+          const sectorSpan = Math.PI * 0.62;
+          const angle = baseAngle + (t - 0.5) * sectorSpan;
+          const rings = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(total) / 2)));
+          const ringIdx = idx % rings;
+          const ringRatio = rings > 1 ? ringIdx / (rings - 1) : 0.5;
+          const r = radius * (0.32 + ringRatio * 0.68);
+          const jitter = (Math.random() - 0.5) * 0.14;
+          px = cx + Math.cos(angle + jitter) * r * stretchX;
+          py = cy + Math.sin(angle + jitter) * r;
+        }
 
         return {
           ...n,
-          x: cx + Math.cos(angle + jitter) * r * stretchX * (0.9 + Math.random() * 0.2),
-          y: cy + Math.sin(angle + jitter) * r * (0.9 + Math.random() * 0.2),
+          x: px,
+          y: py,
           vx: 0,
           vy: 0,
           degree,
@@ -244,12 +328,12 @@
       this.degreeThreshold = 0;
       if (this.nodes.length > 800) {
         const degs = this.nodes.map(n => n.degree).sort((a, b) => b - a);
-        // 移动端内存与 GPU 更紧张，默认只保留约 120 个核心节点
+        // 静态布局下节点少才看得清标签：桌面 ~120 个，移动端 ~55 个
         const target = this._isMobile
-          ? Math.min(120, Math.floor(this.nodes.length * 0.05))
-          : Math.min(350, Math.floor(this.nodes.length * 0.15));
+          ? Math.min(55, Math.floor(this.nodes.length * 0.02))
+          : Math.min(120, Math.floor(this.nodes.length * 0.05));
         const cut = degs[Math.min(target, degs.length - 1)];
-        this.degreeThreshold = Math.max(2, cut);
+        this.degreeThreshold = Math.max(4, cut);
       }
 
       // 已知名基因白名单（教科书级，如 TP53 / BRCA1 / EGFR）
@@ -317,8 +401,8 @@
       this.canvas.style.width = w + 'px';
       this.canvas.style.height = h + 'px';
       this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      this.alpha = Math.max(this.alpha, 0.35);
-      if (this.nodes && this.nodes.length) this._render();
+      // 静态布局：尺寸变化只重绘，不重新激活物理模拟
+      if (this.nodes && this.nodes.length) this.requestRender();
     }
 
     _bindEvents() {
@@ -337,6 +421,7 @@
           this.view.x += dx;
           this.view.y += dy;
           this.dragStart = { x: mx, y: my };
+          this.requestRender();
           return;
         }
 
@@ -344,6 +429,7 @@
         if (hit !== this.hovered) {
           this.hovered = hit;
           c.style.cursor = hit ? 'pointer' : 'grab';
+          this.requestRender();
         }
       });
 
@@ -370,6 +456,7 @@
           }
         }
         c.style.cursor = 'grab';
+        this.requestRender();
       });
 
       c.addEventListener('mouseleave', () => {
@@ -392,6 +479,7 @@
         this.view.x = mx - (mx - this.view.x) * ratio;
         this.view.y = my - (my - this.view.y) * ratio;
         this.view.scale = newScale;
+        this.requestRender();
       }, { passive: false });
 
       // ============ 触摸支持（移动端核心交互）============
@@ -451,6 +539,7 @@
           this.view.x = pinchStart.cx - (pinchStart.cx - pinchStart.viewX) * k;
           this.view.y = pinchStart.cy - (pinchStart.cy - pinchStart.viewY) * k;
           this.view.scale = newScale;
+          this.requestRender();
           return;
         }
 
@@ -465,6 +554,7 @@
           this.view.x += dx;
           this.view.y += dy;
           panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          this.requestRender();
         }
       };
 
@@ -532,11 +622,13 @@
     selectNode(node) {
       this.selected = node;
       this.onSelect(node, this._getRelations(node));
+      this.requestRender();
     }
 
     clearSelection() {
       this.selected = null;
       this.onSelect(null, null);
+      this.requestRender();
     }
 
     _getRelations(node) {
@@ -608,19 +700,15 @@
       return null; // 无通路
     }
 
-    /* 高亮一条路径 */
+    /* 高亮一条路径（只改变绘制，不改变布局） */
     highlightPath(path) {
-      this.highlightedPath = path; // { nodes, edges }
-      if (path) {
-        // 让路径上的节点分布更紧凑，便于观察
-        this.alpha = Math.max(this.alpha, 0.12);
-      }
-      this._render();
+      this.highlightedPath = path;
+      this.requestRender();
     }
 
     clearPath() {
       this.highlightedPath = null;
-      this._render();
+      this.requestRender();
     }
 
     /* 视角自适应：让所有可见节点铺满画布 */
@@ -640,12 +728,12 @@
       const h = maxY - minY + padding * 2;
       if (w <= 0 || h <= 0) return;
 
-      // 允许轻微放大，但不要把节点撑得过大
-      const scale = Math.min(this.width / w, this.height / h, 1.8);
+      // 关键：必须能缩小到把所有节点收进视野
+      const scale = Math.min(this.width / w, this.height / h);
       const cx2 = (minX + maxX) / 2;
       const cy2 = (minY + maxY) / 2;
 
-      const targetScale = Math.max(0.3, Math.min(3, scale));
+      const targetScale = Math.max(0.15, Math.min(2.2, scale));
       const targetX = this.width / 2 - cx2 * targetScale;
       const targetY = this.height / 2 - cy2 * targetScale;
 
@@ -661,6 +749,7 @@
         this.view.x = sx + (targetX - sx) * ease;
         this.view.y = sy + (targetY - sy) * ease;
         this.view.scale = ss + (targetScale - ss) * ease;
+        this.requestRender();
         if (t < 1) requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
@@ -675,13 +764,14 @@
 
     setFilter(type) {
       this.filter = type;
-      this.alpha = Math.max(this.alpha, 0.42);
       this._updateVisibility();
+      this.requestRender();
     }
 
     setSearch(term) {
       this.searchTerm = (term || '').trim().toLowerCase();
       this._updateVisibility();
+      this.requestRender();
     }
 
     _updateVisibility() {
@@ -712,8 +802,7 @@
     setDegreeThreshold(minDegree) {
       this.degreeThreshold = minDegree;
       this._updateVisibility();
-      this.alpha = Math.max(this.alpha, 0.25);
-      this._render();
+      this.requestRender();
       return this.nodes.filter(n => n.visible).length;
     }
 
@@ -738,8 +827,7 @@
         l.visible = l.sourceNode.visible && l.targetNode.visible;
       });
 
-      if (revealed) this.alpha = Math.max(this.alpha, 0.2);
-      this._render();
+      if (revealed) this.requestRender();
       return revealed;
     }
 
@@ -749,8 +837,8 @@
     }
 
     resetView() {
+      // 只重置视角，不动布局
       this._animateView(0, 0, 1, 460);
-      this.alpha = Math.max(this.alpha, 0.3);
     }
 
     /* ============ 物理模拟 ============ */
@@ -817,9 +905,10 @@
       const cx = this.width / 2;
       const cy = this.height / 2;
 
-      // 大图需要更强斥力才能把节点推开，但过强会把节点弹飞
+      // 大图需要更强斥力才能把节点推开，但过强会把节点弹飞。
+      // 静态布局下取中间值，配合 fitView 缩放收进画布。
       const n = nodes.length;
-      this._repulsionScale = n > 1500 ? 1.35 : (n > 500 ? 1.15 : 1.0);
+      this._repulsionScale = n > 1500 ? 1.6 : (n > 500 ? 1.35 : 1.1);
 
       // ---- 斥力 ----
       // 节点数少时用精确的 O(n²)，多时切换到 Barnes-Hut 的 O(n log n)
@@ -842,16 +931,18 @@
       }
 
       // 引力（沿边）
+      // 静态布局追求「舒展」而非「紧凑」，所以边引力要弱、目标距离要大，
+      // 否则所有节点会被拉成密集的一团。
       this.links.forEach(l => {
         const a = l.sourceNode;
         const b = l.targetNode;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        // 目标距离：强关联更近，形成紧密簇
-        const targetDist = 190 - Math.min(l.strength, 10) * 11;
-        // 引力系数加强，让结构更紧凑
-        const force = ((dist - targetDist) / dist) * 0.055 * this.alpha;
+        // 目标边距放大，强关联略近
+        const targetDist = 240 - Math.min(l.strength, 10) * 10;
+        // 引力系数调低，让斥力主导分布
+        const force = ((dist - targetDist) / dist) * 0.018 * this.alpha;
         const fx = dx * force;
         const fy = dy * force;
 
@@ -873,14 +964,14 @@
       nodes.forEach(n => {
         const c = typeCenters[n.type];
         if (!c) return;
-        n.vx += (c.x - n.x) * 0.006 * this.alpha;
-        n.vy += (c.y - n.y) * 0.006 * this.alpha;
+        n.vx += (c.x - n.x) * 0.0018 * this.alpha;
+        n.vy += (c.y - n.y) * 0.0018 * this.alpha;
       });
 
-      // 向心力（保持在画布中心）
+      // 向心力（保持在画布中心，但力度要小，否则会挤成一团）
       nodes.forEach(n => {
-        n.vx += (cx - n.x) * 0.0028 * this.alpha;
-        n.vy += (cy - n.y) * 0.0028 * this.alpha;
+        n.vx += (cx - n.x) * 0.0012 * this.alpha;
+        n.vy += (cy - n.y) * 0.0012 * this.alpha;
       });
 
       // 应用速度 + 阻尼
@@ -940,21 +1031,56 @@
 
     /* ============ 渲染 ============ */
 
+    /*
+     * 静态布局模式：
+     *   布局在初始化阶段一次算好，之后永久冻结，节点不再漂移。
+     *   渲染也只在「需要重绘」时才画（悬停、选中、缩放、平移、路径高亮），
+     *   其余时间完全静止，既好看又不耗电。
+     */
     _animate(now) {
       this.rafId = requestAnimationFrame(this._animate);
 
-      // 帧率节流：移动端目标 ~30fps，避免 GPU 持续满载导致卡顿/耗电
+      // 布局已收敛：不再做物理计算
+      if (this._layoutFrozen) {
+        // 只有被标记为需要重绘时才画一帧
+        if (this._needsRender) {
+          this._needsRender = false;
+          this._render();
+        }
+        return;
+      }
+
+      // 帧率节流
       if (this._frameInterval > 16) {
         if (!now) now = performance.now();
         if (now - this._lastFrameTime < this._frameInterval) return;
         this._lastFrameTime = now;
       }
 
-      // 页面不可见时暂停计算，省电
       if (document.hidden) return;
 
       this._simulate();
       this._render();
+
+      // 温度降到阈值以下 → 冻结布局
+      if (this.alpha < this.alphaMin) {
+        this._freezeLayout();
+      }
+    }
+
+    /* 立即冻结当前布局（停止所有物理计算） */
+    _freezeLayout() {
+      if (this._layoutFrozen) return;
+      this._layoutFrozen = true;
+      this.alpha = 0;
+      // 速度清零，确保画面上绝不会有残余抖动
+      this.nodes.forEach(n => { n.vx = 0; n.vy = 0; });
+      this._needsRender = true;
+    }
+
+    /* 请求重绘（不改变布局） */
+    requestRender() {
+      this._needsRender = true;
     }
 
     _render() {
@@ -1062,12 +1188,12 @@
         }
       });
 
-      // ---- 2. 流动粒子 ----
+      // ---- 2. 连线上的静态光点 ----
+      // 静态布局模式下不做动画：每个粒子固定在边上某个位置，
+      // 只作为装饰性光点，不会流动。
       if (!selId && !hasPath) {
         this.particles.forEach(p => {
           if (!p.link.visible) return;
-          p.t += p.speed;
-          if (p.t > 1) p.t = 0;
 
           const a = p.link.sourceNode;
           const b = p.link.targetNode;
@@ -1076,7 +1202,7 @@
 
           ctx.beginPath();
           ctx.arc(px, py, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(62, 232, 196, ${p.alpha * 0.75})`;
+          ctx.fillStyle = `rgba(62, 232, 196, ${p.alpha * 0.55})`;
           ctx.fill();
         });
       }
@@ -1187,29 +1313,36 @@
         }
         ctx.stroke();
 
-        // 选中脉冲环
+        // 选中标记：静态双环（不做脉冲动画，避免画面持续抖动）
         if (isSel) {
-          const pulse = (Math.sin(performance.now() / 460) + 1) / 2;
           ctx.beginPath();
-          ctx.arc(n.x, n.y, radius * (1.5 + pulse * 0.55), 0, Math.PI * 2);
-          ctx.strokeStyle = this._hexAlpha(color.main, 0.45 * (1 - pulse * 0.65));
-          ctx.lineWidth = 1.6;
+          ctx.arc(n.x, n.y, radius * 1.55, 0, Math.PI * 2);
+          ctx.strokeStyle = this._hexAlpha(color.main, 0.4);
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, radius * 1.9, 0, Math.PI * 2);
+          ctx.strokeStyle = this._hexAlpha(color.main, 0.16);
+          ctx.lineWidth = 1;
           ctx.stroke();
         }
 
-        // 标签
-        // 大图下只在放大后显示基因标签，避免文字糊成一团；
-        // 疾病节点始终显示（它们是图谱的骨架）
+        // 标签显示策略
+        // 静态布局下画面不缩放，所以按「绝对可读性」判断：
+        // 疾病名几乎总是显示（它们是骨架），基因名只在节点足够大时显示。
         const scale = view.scale;
         let showLabel;
         if (inPath || isSel || isHov) {
           showLabel = true;
         } else if (n.type === 'disease') {
-          showLabel = scale > 0.45;
+          // 疾病节点：屏幕上半径够大就显示名字
+          showLabel = screenR >= 4.5;
         } else if (n.type === 'gene') {
-          showLabel = scale > 1.5 || (n.degree >= 8 && scale > 1.0);
+          // 基因节点：只有度数很高或放大后才显示
+          showLabel = (n.degree >= 10 && screenR >= 5) || scale > 1.6;
         } else {
-          showLabel = scale > 0.85;
+          showLabel = screenR >= 5;
         }
 
         if (showLabel) {
