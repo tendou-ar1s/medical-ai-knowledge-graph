@@ -3265,3 +3265,64 @@ body.panel-open {
     max-width: 100% !important;
   }
 }
+
+/* ============================================================
+   移动端卡死修复：移除高开销效果
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  /* 1) 遮罩去掉 backdrop-filter —— 这是移动端 GPU 的头号杀手 */
+  .detail-backdrop {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(3, 6, 11, 0.72) !important;
+  }
+
+  /* 2) 面板不要用 backdrop-filter */
+  .detail-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* 3) 面板内部的毛玻璃全部关掉 */
+  .detail-panel * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* 4) 锁定背景滚动：不用 position:fixed（会触发整页重排导致卡顿） */
+  body.panel-open {
+    position: static !important;
+    overflow: hidden !important;
+    width: auto !important;
+  }
+
+  /* 5) 面板动画改用更轻的缓动，减少合成层压力 */
+  .detail-panel {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: auto !important;
+  }
+
+  /* 6) 进度条动画关掉（面板打开瞬间大量动画会卡） */
+  .rel-item__meter-fill {
+    transition: none !important;
+  }
+
+  /* 7) 减少阴影复杂度 */
+  .detail-panel {
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7) !important;
+  }
+}
+
+/* 关联列表「还有 N 条」提示 */
+.rel-more {
+  margin-top: 10px;
+  padding: 10px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}

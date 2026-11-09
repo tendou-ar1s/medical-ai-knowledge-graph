@@ -269,13 +269,17 @@
         </div>`;
     }
 
-    // 关联关系
+    // 关联关系（移动端限制条数，避免大量 DOM 拖慢渲染）
     if (relations && relations.length) {
+      const MAX_REL = window.innerWidth <= 768 ? 10 : 40;
+      const shown = relations.slice(0, MAX_REL);
+      const hidden = relations.length - shown.length;
+
       html += `
         <div class="detail-block">
           <div class="detail-block__label">关联节点 · ${relations.length}</div>
           <div class="rel-list">
-            ${relations.map(r => {
+            ${shown.map(r => {
               const rc = TYPE_CONFIG[r.node.type] || TYPE_CONFIG.gene;
               const arrow = r.direction === 'out' ? '→' : '←';
               // 评分归一化到 0-100%（strength 是 0-10）
@@ -293,6 +297,7 @@
                 </div>`;
             }).join('')}
           </div>
+          ${hidden > 0 ? `<div class="rel-more">还有 ${hidden} 条关联，可用搜索或放大查看</div>` : ''}
         </div>`;
     }
 

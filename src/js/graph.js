@@ -740,19 +740,44 @@
       this._animateView(targetX, targetY, targetScale);
     }
 
+    /*
+     * 视角动画：只在动画帧内直接绘制，不再走「请求重绘」间接路径。
+     * 移动端视图动画期间降频（每 2 帧画一次），避免全量重绘拖死主线程。
+     */
     _animateView(targetX, targetY, targetScale, duration = 520) {
+      // 取消正在进行的旧动画，避免多个动画叠加
+      if (this._viewAnimId) {
+        cancelAnimationFrame(this._viewAnimId);
+        this._viewAnimId = null;
+      }
+
       const sx = this.view.x, sy = this.view.y, ss = this.view.scale;
       const start = performance.now();
+      // 移动端把动画时长缩短、隔帧绘制，大幅降低负载
+      const dur = this._isMobile ? Math.min(duration, 260) : duration;
+      const everyN = this._isMobile ? 2 : 1;
+      let frame = 0;
+
       const step = (now) => {
-        const t = Math.min((now - start) / duration, 1);
+        const t = Math.min((now - start) / dur, 1);
         const ease = 1 - Math.pow(1 - t, 3);
         this.view.x = sx + (targetX - sx) * ease;
         this.view.y = sy + (targetY - sy) * ease;
         this.view.scale = ss + (targetScale - ss) * ease;
-        this.requestRender();
-        if (t < 1) requestAnimationFrame(step);
+
+        // 隔帧绘制（移动端）
+        if (frame++ % everyN === 0 || t >= 1) {
+          this._render();
+        }
+
+        if (t < 1) {
+          this._viewAnimId = requestAnimationFrame(step);
+        } else {
+          this._viewAnimId = null;
+          this._render();
+        }
       };
-      requestAnimationFrame(step);
+      this._viewAnimId = requestAnimationFrame(step);
     }
 
     focusNode(node) {
@@ -1255,61 +1280,79 @@
 
         ctx.globalAlpha = dimmed ? (hasPath ? 0.1 : 0.16) : 1;
 
-        // 外发光（极小节点跳过，节省开销）
-        if (tinyNode && !inPath && !isSel) {
-          // 只画一个纯色小圆
+        // ---- 移动端极简渲染模式 ----
+        // 手机 GPU 扛不住每个节点 2~3 次 createRadialGradient，
+        // 775 个节点 = 近 2000 次渐变对象创建，会直接卡死。
+        // 移动端改成纯色圆 + 简单描边，视觉损失很小但性能提升 10 倍以上。
+        if (this._isMobile && !isSel && !isHov && !inPath) {
+          // 简单的发光：一个半透明的稍大圆（只用 fillStyle，无渐变）
+          if (!tinyNode && n.degree >= 8) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, radius * 1.7, 0, Math.PI * 2);
+            ctx.fillStyle = color.dim;
+            ctx.globalAlpha = (dimmed ? 0.06 : 0.3);
+            ctx.fill();
+            ctx.globalAlpha = dimmed ? (hasPath ? 0.1 : 0.16) : 1;
+          }
           ctx.beginPath();
           ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
           ctx.fillStyle = color.main;
           ctx.fill();
-          ctx.globalAlpha = 1;
-          return;
-        }
-
-        if (inPath) {
-          const glowR = radius * 3.6;
-          const g = ctx.createRadialGradient(n.x, n.y, radius * 0.5, n.x, n.y, glowR);
-          g.addColorStop(0, 'rgba(62, 232, 196, 0.55)');
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.beginPath();
-          ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
-          ctx.fillStyle = g;
-          ctx.fill();
-        } else if (isSel || isHov || isNeighbor) {
-          const glowR = radius * (isSel ? 3.4 : 2.4);
-          const g = ctx.createRadialGradient(n.x, n.y, radius * 0.5, n.x, n.y, glowR);
-          g.addColorStop(0, color.glow);
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.beginPath();
-          ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
-          ctx.fillStyle = g;
-          ctx.fill();
         } else {
-          const glowR = radius * 1.9;
-          const g = ctx.createRadialGradient(n.x, n.y, radius * 0.4, n.x, n.y, glowR);
-          g.addColorStop(0, color.dim);
-          g.addColorStop(1, 'rgba(0,0,0,0)');
+          // 桌面端 / 选中态：保留完整渐变效果
+          if (tinyNode && !inPath && !isSel) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color.main;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            return;
+          }
+
+          if (inPath) {
+            const glowR = radius * 3.6;
+            const g = ctx.createRadialGradient(n.x, n.y, radius * 0.5, n.x, n.y, glowR);
+            g.addColorStop(0, 'rgba(62, 232, 196, 0.55)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+            ctx.fillStyle = g;
+            ctx.fill();
+          } else if (isSel || isHov || isNeighbor) {
+            const glowR = radius * (isSel ? 3.4 : 2.4);
+            const g = ctx.createRadialGradient(n.x, n.y, radius * 0.5, n.x, n.y, glowR);
+            g.addColorStop(0, color.glow);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+            ctx.fillStyle = g;
+            ctx.fill();
+          } else {
+            const glowR = radius * 1.9;
+            const g = ctx.createRadialGradient(n.x, n.y, radius * 0.4, n.x, n.y, glowR);
+            g.addColorStop(0, color.dim);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+            ctx.fillStyle = g;
+            ctx.fill();
+          }
+
+          // 主体圆（渐变）
+          const grad = ctx.createRadialGradient(
+            n.x - radius * 0.32, n.y - radius * 0.32, radius * 0.12,
+            n.x, n.y, radius
+          );
+          grad.addColorStop(0, this._lighten(color.main, 0.42));
+          grad.addColorStop(0.65, color.main);
+          grad.addColorStop(1, this._darken(color.main, 0.32));
           ctx.beginPath();
-          ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
-          ctx.fillStyle = g;
+          ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
           ctx.fill();
         }
 
-        // 主体圆
-        const grad = ctx.createRadialGradient(
-          n.x - radius * 0.32, n.y - radius * 0.32, radius * 0.12,
-          n.x, n.y, radius
-        );
-        grad.addColorStop(0, this._lighten(color.main, 0.42));
-        grad.addColorStop(0.65, color.main);
-        grad.addColorStop(1, this._darken(color.main, 0.32));
-
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        // 描边
+        // 描边（主体圆已在上面画好，这里只描边）
         if (inPath) {
           ctx.strokeStyle = '#7dffe0';
           ctx.lineWidth = 2.8;
@@ -1317,6 +1360,8 @@
           ctx.strokeStyle = isSel ? '#ffffff' : this._hexAlpha(color.main, 0.85);
           ctx.lineWidth = isSel ? 2.4 : 1.1;
         }
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
         ctx.stroke();
 
         // 选中标记：静态双环（不做脉冲动画，避免画面持续抖动）
